@@ -1,5 +1,5 @@
 // ================= SOCKET CONNECTION =================
-const socket = io();
+const socket = io("https://privchat-production.up.railway.app");
 const username = localStorage.getItem("username");
 const room = localStorage.getItem("room");
 const token = localStorage.getItem("token");
@@ -545,3 +545,4 @@ messages.addEventListener("touchend", (e) => {
         replyBox.style.display = "flex";
     }
 });
+
