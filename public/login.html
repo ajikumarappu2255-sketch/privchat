@@ -96,20 +96,32 @@
 
             socket.emit("joinRoom", { username: u, room: r, token: t });
 
-            socket.once("privateMsg", () => {
-                localStorage.setItem("username", u);
-                localStorage.setItem("room", r);
-                localStorage.setItem("token", t);
-                window.location.href = "chat.html";
-            });
+// Listen for server messages
+socket.once("privateMsg", (msg) => {
+    console.log("Login received privateMsg:", msg); // Debug line
 
-            socket.once("warningMsg", msg => {
-                error.innerText = msg;
-            });
-        }
+    if (msg === "Waiting for owner approval...") {
+        // Existing room, pending approval → show message but do NOT redirect
+        error.innerText = msg;
+        return;
+    }
+
+    // New room (you created it) or existing room approved → redirect
+    localStorage.setItem("username", u);
+    localStorage.setItem("room", r);
+    localStorage.setItem("token", t);
+    window.location.href = "chat.html";
+});
+
+socket.once("warningMsg", (msg) => {
+    console.log("Login received warningMsg:", msg); // Debug line
+    error.innerText = msg;
+});
+  }
     </script>
 
 </body>
 
 
 </html>
+
