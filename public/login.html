@@ -69,7 +69,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        const socket = io("https://privchat-production.up.railway.app");
 
         // Simple Toggle for visibility (Visual only)
         document.querySelector('.show-token').addEventListener('click', function () {
@@ -110,5 +110,6 @@
     </script>
 
 </body>
+
 
 </html>
