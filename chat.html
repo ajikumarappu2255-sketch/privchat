@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Private Chat</title>
+
+    <!-- IMPORTANT: enables full-screen on mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="app">
+        <div class="chat-container">
+
+            <!-- Header -->
+            <div class="chat-header">
+                <div class="header-left">
+                    <div id="roomName"></div>
+                    <div id="usernameDisplay"></div>
+                    <div id="onlineUsers" class="online-users"></div> <!-- Added -->
+                </div>
+
+                <div class="menu">
+                    <i onclick="toggleDropdown()">⋮</i>
+                    <div class="dropdown" id="dropdown">
+                        <p onclick="logout()">Logout</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="chat-body" id="messages"></div>
+            <div id="typingIndicator" class="typing-indicator" style="display:none;"></div>
+            <!-- Reply Preview Box -->
+            <div id="replyBox" class="reply-box" style="display:none;">
+                <span id="replyText"></span>
+                <button onclick="cancelReply()">✖</button>
+            </div>
+
+            <!-- Input -->
+            <div class="chat-input">
+
+                <!-- ✅ Emoji Button -->
+                <button id="emojiBtn" class="emoji-btn">😊</button>
+
+                <!-- ✅ Emoji Picker -->
+                <div id="emojiPicker" class="emoji-picker">
+                    <span>😀</span><span>😃</span><span>😄</span><span>😁</span>
+                    <span>😆</span><span>😅</span><span>😂</span><span>🤣</span>
+                    <span>😊</span><span>😇</span><span>😉</span><span>😍</span>
+                    <span>🥰</span><span>😘</span><span>😜</span><span>🤪</span>
+                    <span>🤩</span><span>👍</span><span>👎</span><span>👌</span>
+                    <span>🙏</span><span>👏</span><span>💪</span><span>❤️</span>
+                    <span>💔</span><span>🔥</span><span>🎉</span><span>😢</span>
+                    <span>😭</span><span>😡</span><span>😎</span>
+                </div>
+
+                <!-- ✅ Mention Dropdown -->
+                <div id="mentionDropdown" class="mention-dropdown"></div>
+
+                <input id="msg" placeholder="Type a message..." onkeypress="pressEnter(event)" />
+
+                <button id="sendBtn" onclick="sendMessage()">Send</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JS -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
