@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Private Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="login-body">
+
+    <div class="login-wrapper">
+        <div class="login-split">
+            <!-- LEFT PANEL: FORM -->
+            <div class="login-form-side">
+                <div class="form-content">
+                    <h1>Login</h1>
+                    <p class="subtitle">Safe.Secure.Private.</p>
+
+                    <div class="input-container">
+                        <label>Username</label>
+                        <div class="input-box">
+                            <input id="username" type="text" placeholder="e.g.yourname">
+                        </div>
+                    </div>
+
+                    <div class="input-container">
+                        <label>Room Name</label>
+                        <div class="input-box">
+                            <input id="room" type="text" placeholder="e.g. TheVault">
+                        </div>
+                    </div>
+
+                    <div class="input-container">
+                        <label>Security Token</label>
+                        <div class="input-box">
+                            <input id="token" type="password" placeholder="••••••">
+                            <i class="fas fa-eye show-token"></i>
+                        </div>
+                    </div>
+
+                    <button class="login-btn" onclick="login()">Login</button>
+
+
+
+                    <p id="error" class="login-error"></p>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: GRAPHIC -->
+            <div class="login-graphic-side">
+                <div class="graphic-overlay"></div>
+                <div class="shield-container">
+                    <!-- Animated Lock Graphic (CSS-based "Video") -->
+                    <div class="lock-animation-box">
+                        <div class="pulse-ring"></div>
+                        <div class="pulse-ring delay"></div>
+                        <div class="lock-icon-container">
+                            <i class="fas fa-lock privacy-lock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Simple Toggle for visibility (Visual only)
+        document.querySelector('.show-token').addEventListener('click', function () {
+            const input = document.getElementById('token');
+            if (input.type === 'password') {
+                input.type = 'text';
+                this.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                this.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        });
+
+        function login() {
+            const u = document.getElementById('username').value.trim();
+            const r = document.getElementById('room').value.trim();
+            const t = document.getElementById('token').value.trim();
+            const error = document.getElementById('error');
+
+            if (!u || !r || !t) {
+                error.innerText = "All fields are required!";
+                return;
+            }
+
+            socket.emit("joinRoom", { username: u, room: r, token: t });
+
+            socket.once("privateMsg", () => {
+                localStorage.setItem("username", u);
+                localStorage.setItem("room", r);
+                localStorage.setItem("token", t);
+                window.location.href = "chat.html";
+            });
+
+            socket.once("warningMsg", msg => {
+                error.innerText = msg;
+            });
+        }
+    </script>
+
+</body>
+
+</html>

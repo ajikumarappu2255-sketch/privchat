@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy First</title>
+    <link rel="stylesheet" href="intro.css">
+    <!-- Using Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for the lock icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="background-glow"></div>
+
+    <div class="intro-container">
+        <!-- Animated Icon -->
+        <i class="fas fa-shield-alt lock-icon"></i>
+
+        <!-- Main Heading -->
+        <h1 class="main-title">Let's chat with Privacy</h1>
+
+        <!-- Rotating Quotes -->
+        <div class="quote-box" id="quoteBox">
+            <div class="quote">"Your secrets are safe with us."</div>
+            <div class="quote">"Encryption is the key to freedom."</div>
+            <div class="quote">"What happens here, stays here."</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar (Visual indicator of time remaining) -->
+    <div class="loader-line" id="loader"></div>
+
+    <!-- Skip Button Removed -->
+
+    <script>
+        const quotes = document.querySelectorAll('.quote');
+        const loader = document.getElementById('loader');
+        let currentQuote = 0;
+        const totalDuration = 7500; // Adjusted to 7.5s to fully fit quotes
+        const quoteDuration = 2400; // 2.4s per quote * 3 = 7.2s
+
+        // Initialize first quote immediately
+        quotes[0].classList.add('active');
+
+        // Start Loader Animation
+        setTimeout(() => {
+            loader.style.width = '100%';
+            loader.style.transition = `width ${totalDuration}ms linear`;
+        }, 100);
+
+        // Quote Rotation Logic
+        const rotateQuotes = setInterval(() => {
+            // Fade out current
+            quotes[currentQuote].classList.remove('active');
+            quotes[currentQuote].classList.add('exit');
+
+            // Move to next
+            currentQuote = (currentQuote + 1) % quotes.length;
+
+            // Prepare next (remove exit class if it has it from previous cycle)
+            quotes[currentQuote].classList.remove('exit');
+
+            // Wait slight delay for exit animation before showing new one? 
+            // Actually CSS transition handles overlap gracefully if we just toggle classes.
+            quotes[currentQuote].classList.add('active');
+
+        }, quoteDuration);
+
+        // Redirect Function
+        function goToLogin() {
+            clearInterval(rotateQuotes);
+            document.body.style.opacity = '0'; // Fade out entire page
+            document.body.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 500);
+        }
+
+        // Auto Redirect after total duration
+        const autoRedirect = setTimeout(goToLogin, totalDuration);
+
+        // Skip Button Logic Removed
+    </script>
+</body>
+
+</html>

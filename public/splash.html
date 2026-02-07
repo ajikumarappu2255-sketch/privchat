@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Private Chat</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: white;
+      overflow: hidden;
+    }
+
+    .logo {
+      width: 220px;
+      opacity: 0;
+      animation: intro 2.5s ease forwards;
+    }
+
+    @keyframes intro {
+      0% {
+        transform: scale(0.6);
+        opacity: 0;
+      }
+
+      40% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      70% {
+        transform: scale(1.05);
+      }
+
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .fade-out {
+      animation: fadeOut 0.5s ease forwards;
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- LOGO -->
+  <img src="logo.jpeg" class="logo" id="logo">
+
+  <script>
+    // ✅ FIX 1: clear old login/session data
+    localStorage.clear();
+
+    // Fade out logo
+    setTimeout(() => {
+      document.getElementById("logo").classList.add("fade-out");
+    }, 2000);
+
+    // ✅ FIX 2: go to LOGIN, not chat
+    setTimeout(() => {
+      window.location.href = "intro.html";
+    }, 2600); 
+  </script>
+
+</body>
+
+</html>
