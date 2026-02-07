@@ -67,9 +67,11 @@
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const socket = io("https://privchat-production.up.railway.app");
+        const socket = io("https://privchat-production.up.railway.app", {
+            transports: ["websocket", "polling"]
+        });
 
         // Simple Toggle for visibility (Visual only)
         document.querySelector('.show-token').addEventListener('click', function () {
@@ -96,32 +98,19 @@
 
             socket.emit("joinRoom", { username: u, room: r, token: t });
 
-// Listen for server messages
-socket.once("privateMsg", (msg) => {
-    console.log("Login received privateMsg:", msg); // Debug line
+            socket.once("privateMsg", () => {
+                localStorage.setItem("username", u);
+                localStorage.setItem("room", r);
+                localStorage.setItem("token", t);
+                window.location.href = "chat.html";
+            });
 
-    if (msg === "Waiting for owner approval...") {
-        // Existing room, pending approval → show message but do NOT redirect
-        error.innerText = msg;
-        return;
-    }
-
-    // New room (you created it) or existing room approved → redirect
-    localStorage.setItem("username", u);
-    localStorage.setItem("room", r);
-    localStorage.setItem("token", t);
-    window.location.href = "chat.html";
-});
-
-socket.once("warningMsg", (msg) => {
-    console.log("Login received warningMsg:", msg); // Debug line
-    error.innerText = msg;
-});
-  }
+            socket.once("warningMsg", msg => {
+                error.innerText = msg;
+            });
+        }
     </script>
 
 </body>
 
-
 </html>
-
