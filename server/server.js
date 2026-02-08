@@ -2,7 +2,10 @@ const express = require("express");
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: {
+        origin: ["https://privchat-pi.vercel.app", "http://localhost:3000"],
+        methods: ["GET", "POST"]
+    }
 });
 
 app.use(express.static("public"));
@@ -32,11 +35,6 @@ function broadcastRoomUsers(room) {
 }
 
 io.on("connection", socket => {
-    console.log("New client connected:", socket.id);
-
-    socket.on("connect_error", (err) => {
-        console.error("Connection Error:", err.message);
-    });
 
     // ================= JOIN ROOM =================
     socket.on("joinRoom", ({ username, room, token }) => {
@@ -195,8 +193,7 @@ io.on("connection", socket => {
     });
 
     // ================= DISCONNECT =================
-    socket.on("disconnect", (reason) => {
-        console.log("Client disconnected:", socket.id, "Reason:", reason);
+    socket.on("disconnect", () => {
         for (const room in rooms) {
             const r = rooms[room];
 
@@ -216,7 +213,6 @@ io.on("connection", socket => {
 
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-    console.log("Server running on port " + PORT);
-});
+http.listen(3000, () =>
+    console.log("Server running on http://localhost:3000")
+);
