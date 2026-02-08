@@ -67,10 +67,11 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
         const socket = io("https://privchat-production.up.railway.app", {
-            transports: ["websocket", "polling"]
+            transports: ["websocket", "polling"],
+            withCredentials: true
         });
 
         // Simple Toggle for visibility (Visual only)
