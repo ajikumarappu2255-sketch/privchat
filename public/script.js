@@ -43,13 +43,15 @@ const mentionDropdown = document.getElementById("mentionDropdown");
 
 
 
+// ================= DISPLAY INFO IMMEDIATELY =================
+usernameDisplay.innerText = "User: " + username;
+roomName.innerText = "Room: " + room;
+
 // ================= JOIN ROOM =================
 socket.emit("joinRoom", { username, room, token });
 
 // ================= RECEIVE PRIVATE MESSAGE =================
 socket.on("privateMsg", data => {
-    usernameDisplay.innerText = "User: " + username;
-    roomName.innerText = "Room: " + room;
 
     let text, messageId, sender;
 
