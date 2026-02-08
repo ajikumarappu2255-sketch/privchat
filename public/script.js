@@ -1,6 +1,7 @@
 // ================= SOCKET CONNECTION =================
 const socket = io("https://privchat-production.up.railway.app", {
-    transports: ["websocket", "polling"]
+    transports: ["websocket", "polling"],
+    withCredentials: true
 });
 const username = localStorage.getItem("username");
 const room = localStorage.getItem("room");
