@@ -100,12 +100,30 @@ socket.on("privateMsg", data => {
     if (isEmoji) p.classList.add("emoji-msg");
 
     // CONSTRUCT HTML
-    p.innerHTML = `
-        ${replyHtml}
-        <span class="msg-text">${parsedText}</span>
-        ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
-        <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
-    `;
+    // CONSTRUCT HTML
+    // 🔹 FILE MESSAGE HANDLING
+    if (text.includes("[[FILE_MSG]]")) {
+        try {
+            const parts = text.split("[[FILE_MSG]]");
+            const fileData = JSON.parse(parts[1]);
+
+            p.classList.add("file-msg");
+            p.innerHTML = getFileMessageHTML(fileData) +
+                (isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : "");
+
+            // Allow menu for files too (delete only)
+        } catch (e) {
+            console.error("File parse error", e);
+            p.innerText = "Error loading attachment.";
+        }
+    } else {
+        p.innerHTML = `
+            ${replyHtml}
+            <span class="msg-text">${parsedText}</span>
+            ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
+            <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
+        `;
+    }
 
     // MENU (Inside bubble for better positioning)
     // MENU (Inside bubble for better positioning)
@@ -124,7 +142,7 @@ socket.on("privateMsg", data => {
         menu.id = `menu-${messageId}`;
 
         let menuOptions = '';
-        if (isMe) {
+        if (isMe && !text.includes("[[FILE_MSG]]")) {
             menuOptions += `<p onclick="startEditMessage('${messageId}')">Edit</p>`;
         }
         menuOptions += `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
@@ -532,21 +550,135 @@ messages.addEventListener("touchstart", (e) => {
     startX = e.touches[0].clientX;
 });
 
-messages.addEventListener("touchend", (e) => {
-    const endX = e.changedTouches[0].clientX;
-    const msg = e.target.closest(".msg-bubble");
-    if (!msg) return;
+// ================= FILE SENDING FEATURE =================
 
-    if (endX - startX > 80) { // swipe right threshold
-        // ======= IMPROVED CLEAN MESSAGE LOGIC =======
-        const textSpan = msg.querySelector(".msg-text");
-        replyToMessage = textSpan ? textSpan.innerText.trim() : msg.innerText.trim();
-        // ============================================
+const fileInput = document.getElementById("fileInput");
 
-        const replyBox = document.getElementById("replyBox");
-        const replyText = document.getElementById("replyText");
+// File Selection Listener
+fileInput.addEventListener("change", handleFileSelect);
 
-        replyText.textContent = replyToMessage;
-        replyBox.style.display = "flex";
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. Validate Size (10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert("File is too large! Max limit is 10MB.");
+        fileInput.value = ""; // reset
+        return;
     }
+
+    // 2. Read File
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const fileData = {
+            name: file.name,
+            type: file.type,
+            size: formatBytes(file.size),
+            data: event.target.result // Base64 string
+        };
+        sendFile(fileData);
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = ""; // reset for next use
+}
+
+// Send File Message
+function sendFile(fileData) {
+    const messageId = Date.now() + "_" + Math.random().toString(36).slice(2);
+
+    // Create Local Bubble (Optimistic UI)
+    const container = document.createElement("div");
+    container.className = "msg-container self";
+
+    const p = document.createElement("div");
+    p.className = "msg-bubble self file-msg";
+    p.dataset.id = messageId;
+
+    p.innerHTML = getFileMessageHTML(fileData) +
+        `<span class="ticks" id="tick-${messageId}">✓</span>`;
+
+    // Menu for Delete
+    const menuBtn = document.createElement("div");
+    menuBtn.className = "msg-actions-btn";
+    menuBtn.innerHTML = "⋮";
+    menuBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleMsgMenu(messageId);
+    };
+
+    const menu = document.createElement("div");
+    menu.className = "msg-actions-menu";
+    menu.id = `menu-${messageId}`;
+    menu.innerHTML = `<p onclick="deleteMessage('${messageId}')">Delete</p>`; // No edit for files
+
+    p.appendChild(menuBtn);
+    p.appendChild(menu);
+
+    container.appendChild(p);
+    messages.appendChild(container);
+    messages.scrollTop = messages.scrollHeight;
+
+    myMessages[messageId] = p;
+
+    // Send to Server
+    // Prefix [[FILE_MSG]] + JSON
+    const payload = JSON.stringify(fileData);
+    const finalMsg = `[[FILE_MSG]]${payload}`;
+
+    socket.emit("privateMsg", {
+        room,
+        message: `${username}: ${finalMsg}`,
+        messageId,
+        sender: socket.id
+    });
+}
+
+// Generate HTML for File Message
+function getFileMessageHTML(file) {
+    const { name, type, data, size } = file;
+
+    if (type.startsWith("image/")) {
+        return `<img src="${data}" alt="${name}" onclick="openMedia('${data}', 'image')">`;
+    }
+    else if (type.startsWith("video/")) {
+        return `<video src="${data}" controls></video>`;
+    }
+    else {
+        // Document / PDF / Other
+        return `
+            <a href="${data}" download="${name}" class="file-card">
+                <span class="file-icon">📄</span>
+                <div class="file-info">
+                    <div class="file-name">${name}</div>
+                    <div class="file-size">${size}</div>
+                </div>
+                <span>⬇️</span>
+            </a>
+        `;
+    }
+}
+
+// Helper: Open Media (Full Screen / New Tab)
+function openMedia(src, type) {
+    const w = window.open("");
+    if (type === "image") {
+        w.document.write(`<img src="${src}" style="max-width:100%; height:auto;">`);
+    }
+}
+
+// Helper: Format Bytes
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Prevent Enter key in file input (just in case)
+fileInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") e.preventDefault();
 });
