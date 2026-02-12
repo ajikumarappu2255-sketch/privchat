@@ -1,3 +1,10 @@
+// ================= GLOBAL ERROR HANDLER (STABILITY) =================
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+    console.error("Global Error Caught:", msg, "Line:", lineNo, "Error:", error);
+    // Prevent white screen by suppressing the error and keeping UI alive
+    return true;
+};
+
 // ================= SOCKET CONNECTION =================
 const socket = io("https://privchat-production.up.railway.app", {
     transports: ["websocket", "polling"],
@@ -51,98 +58,134 @@ roomName.innerText = "Room: " + room;
 socket.emit("joinRoom", { username, room, token });
 
 // ================= RECEIVE PRIVATE MESSAGE =================
+// ================= RECEIVE PRIVATE MESSAGE (ROBUST) =================
 socket.on("privateMsg", data => {
+    try {
+        // 1. SAFETY: Check data existence
+        if (!data) return;
 
-    let text, messageId, sender;
+        let text, messageId, sender;
 
-    if (typeof data === "string") {
-        text = data;
-    } else {
-        text = data.message;
-        messageId = data.messageId;
-        sender = data.sender;
-    }
-
-    const isMe = text.startsWith(username + ":");
-    if (isMe && messageId && myMessages[messageId]) return;
-
-    // Container
-    const container = document.createElement("div");
-    container.className = isMe ? "msg-container self" : "msg-container";
-
-    // ✅ PARSE REPLY (Regex to separate reply header)
-    let replyHtml = "";
-    let cleanText = text;
-
-    // Regex to match "Reply to: "quoted"\nActual message"
-    const replyMatch = text.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
-    if (replyMatch) {
-        const replyContent = replyMatch[1];
-        cleanText = replyMatch[2];
-        replyHtml = `
-            <div class="reply-preview">
-                <strong>Replied to:</strong>
-                <span>${replyContent}</span>
-            </div>
-        `;
-    }
-
-    // ✅ Parse Mentions
-    const parsedText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-    // Message Bubble
-    const p = document.createElement("div"); // Changed to div
-    p.className = isMe ? "msg-bubble self" : "msg-bubble"; // New class
-    if (messageId) p.dataset.id = messageId;
-
-    // Detect Emoji-Only (Basic Regex)
-    const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
-    if (isEmoji) p.classList.add("emoji-msg");
-
-    // CONSTRUCT HTML
-    p.innerHTML = `
-        ${replyHtml}
-        <span class="msg-text">${parsedText}</span>
-        ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
-        <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
-    `;
-
-    // MENU (Inside bubble for better positioning)
-    // MENU (Inside bubble for better positioning)
-    // ✅ PERMISSION FIX: Only show menu if I am the sender
-    if (isMe && messageId) {
-        const menuBtn = document.createElement("div");
-        menuBtn.className = isMe ? "msg-actions-btn" : "msg-actions-btn left-btn"; // Position check
-        menuBtn.innerHTML = "⋮";
-        menuBtn.onclick = (e) => {
-            e.stopPropagation();
-            toggleMsgMenu(messageId);
-        };
-
-        const menu = document.createElement("div");
-        menu.className = "msg-actions-menu";
-        menu.id = `menu-${messageId}`;
-
-        let menuOptions = '';
-        if (isMe) {
-            menuOptions += `<p onclick="startEditMessage('${messageId}')">Edit</p>`;
+        // 2. SAFETY: Handle string vs object
+        if (typeof data === "string") {
+            text = data;
+        } else {
+            text = data.message || ""; // Fallback
+            messageId = data.messageId;
+            sender = data.sender;
         }
-        menuOptions += `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
 
-        menu.innerHTML = menuOptions;
+        // 3. SAFETY: Ensure text is string
+        if (typeof text !== "string") text = String(text);
 
-        p.appendChild(menuBtn);
-        p.appendChild(menu);
-    }
+        const isMe = text.startsWith(username + ":");
+        // 4. SAFETY: Check for duplicate ID to prevent loop
+        if (isMe && messageId && myMessages[messageId]) return;
 
-    container.appendChild(p);
-    messages.appendChild(container); // Standard append
-    messages.scrollTop = messages.scrollHeight;
+        // 5. STABILITY: Check DOM Limit
+        checkDOMLimit();
 
-    myMessages[messageId] = p; // Store the bubble
+        // Container
+        const container = document.createElement("div");
+        container.className = isMe ? "msg-container self" : "msg-container";
 
-    if (!isMe && messageId) {
-        socket.emit("messageRead", { room, messageId, username });
+        // ✅ PARSE REPLY (Regex to separate reply header)
+        let replyHtml = "";
+        let cleanText = text;
+
+        try {
+            // Regex to match "Reply to: "quoted"\nActual message"
+            const replyMatch = text.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
+            if (replyMatch) {
+                const replyContent = replyMatch[1] || "...";
+                cleanText = replyMatch[2] || "";
+                replyHtml = `
+                    <div class="reply-preview">
+                        <strong>Replied to:</strong>
+                        <span>${escapeHtml(replyContent)}</span>
+                    </div>
+                `;
+            }
+        } catch (e) { console.warn("Reply parse error", e); }
+
+        // ✅ Parse Mentions (Safe)
+        const parsedText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+
+        // Message Bubble
+        const p = document.createElement("div");
+        p.className = isMe ? "msg-bubble self" : "msg-bubble";
+        if (messageId) p.dataset.id = messageId;
+
+        // Detect Emoji-Only (Safe)
+        try {
+            const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
+            if (isEmoji) p.classList.add("emoji-msg");
+        } catch (e) { /* Ignore regex error on old browsers */ }
+
+        // CONSTRUCT HTML
+        // 🔹 FILE MESSAGE HANDLING (RESTORED)
+        if (text.includes("[[FILE_MSG]]")) {
+            try {
+                const parts = text.split("[[FILE_MSG]]");
+                if (parts[1]) {
+                    const fileData = JSON.parse(parts[1]);
+                    p.classList.add("file-msg");
+                    p.innerHTML = getFileMessageHTML(fileData) +
+                        (isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : "");
+                } else {
+                    throw new Error("Empty file data");
+                }
+            } catch (e) {
+                console.error("File parse error", e);
+                p.innerText = "Error loading attachment.";
+            }
+        } else {
+            p.innerHTML = `
+                ${replyHtml}
+                <span class="msg-text">${parsedText}</span>
+                ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
+                <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
+            `;
+        }
+
+        // MENU (Inside bubble for better positioning)
+        if (isMe && messageId) {
+            const menuBtn = document.createElement("div");
+            menuBtn.className = isMe ? "msg-actions-btn" : "msg-actions-btn left-btn";
+            menuBtn.innerHTML = "⋮";
+            menuBtn.onclick = (e) => {
+                e.stopPropagation();
+                toggleMsgMenu(messageId);
+            };
+
+            const menu = document.createElement("div");
+            menu.className = "msg-actions-menu";
+            menu.id = `menu-${messageId}`;
+
+            let menuOptions = '';
+            // Disable edit for files
+            if (isMe && !text.includes("[[FILE_MSG]]")) {
+                menuOptions += `<p onclick="startEditMessage('${messageId}')">Edit</p>`;
+            }
+            menuOptions += `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
+
+            menu.innerHTML = menuOptions;
+
+            p.appendChild(menuBtn);
+            p.appendChild(menu);
+        }
+
+        container.appendChild(p);
+        messages.appendChild(container); // Standard append
+        messages.scrollTop = messages.scrollHeight;
+
+        if (messageId) myMessages[messageId] = p; // Store the bubble
+
+        if (!isMe && messageId) {
+            socket.emit("messageRead", { room, messageId, username });
+        }
+    } catch (err) {
+        console.error("Critical Error in privateMsg handler:", err);
     }
 });
 
@@ -550,3 +593,193 @@ messages.addEventListener("touchend", (e) => {
         replyBox.style.display = "flex";
     }
 });
+
+// ================= FILE SENDING FEATURE (RESTORED) =================
+
+function safeClickFileInput() {
+    const fileInput = document.getElementById("fileInput");
+    if (fileInput) fileInput.click();
+}
+
+const fileInput = document.getElementById("fileInput");
+if (fileInput) {
+    fileInput.addEventListener("change", handleFileSelect);
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. Validate Size (10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert("File is too large! Max limit is 10MB.");
+        e.target.value = ""; // reset
+        return;
+    }
+
+    // 2. Read File
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const fileData = {
+            name: file.name,
+            type: file.type,
+            size: formatBytes(file.size),
+            data: event.target.result // Base64 string
+        };
+        sendFile(fileData);
+    };
+    reader.onerror = function (err) {
+        console.error("File read error:", err);
+        alert("Failed to read file.");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ""; // reset
+}
+
+// Send File Message
+function sendFile(fileData) {
+    try {
+        const messageId = Date.now() + "_" + Math.random().toString(36).slice(2);
+
+        // STABILITY: Check DOM Limit
+        checkDOMLimit();
+
+        // Create Local Bubble (Optimistic UI)
+        const container = document.createElement("div");
+        container.className = "msg-container self";
+
+        const p = document.createElement("div");
+        p.className = "msg-bubble self file-msg";
+        p.dataset.id = messageId;
+
+        p.innerHTML = getFileMessageHTML(fileData) +
+            `<span class="ticks" id="tick-${messageId}">✓</span>`;
+
+        // Menu for Delete
+        const menuBtn = document.createElement("div");
+        menuBtn.className = "msg-actions-btn";
+        menuBtn.innerHTML = "⋮";
+        menuBtn.onclick = (e) => {
+            e.stopPropagation();
+            toggleMsgMenu(messageId);
+        };
+
+        const menu = document.createElement("div");
+        menu.className = "msg-actions-menu";
+        menu.id = `menu-${messageId}`;
+        menu.innerHTML = `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
+
+        p.appendChild(menuBtn);
+        p.appendChild(menu);
+
+        container.appendChild(p);
+        messages.appendChild(container);
+        messages.scrollTop = messages.scrollHeight;
+
+        myMessages[messageId] = p;
+
+        // Send to Server
+        // Prefix [[FILE_MSG]] + JSON
+        const payload = JSON.stringify(fileData);
+        const finalMsg = `[[FILE_MSG]]${payload}`;
+
+        socket.emit("privateMsg", {
+            room,
+            message: `${username}: ${finalMsg}`,
+            messageId,
+            sender: socket.id
+        });
+    } catch (err) {
+        console.error("Send file error:", err);
+    }
+}
+
+// Generate HTML for File Message (Safe)
+function getFileMessageHTML(file) {
+    try {
+        if (!file || !file.type) return "<span>Unknown file</span>";
+
+        const { name, type, data, size } = file;
+
+        if (type.startsWith("image/")) {
+            return `<img src="${data}" alt="${escapeHtml(name)}" onclick="openMedia('${data}', 'image')">`;
+        }
+        else if (type.startsWith("video/")) {
+            return `<video src="${data}" controls></video>`;
+        }
+        else {
+            // Document / PDF / Other
+            return `
+                <a href="${data}" download="${escapeHtml(name)}" class="file-card">
+                    <span class="file-icon">📄</span>
+                    <div class="file-info">
+                        <div class="file-name">${escapeHtml(name)}</div>
+                        <div class="file-size">${size}</div>
+                    </div>
+                    <span>⬇️</span>
+                </a>
+            `;
+        }
+    } catch (e) {
+        return "<span>Error displaying file</span>";
+    }
+}
+
+// Helper: Open Media (Full Screen / New Tab)
+function openMedia(src, type) {
+    try {
+        const w = window.open("");
+        if (type === "image") {
+            w.document.write(`<img src="${src}" style="max-width:100%; height:auto;">`);
+        }
+    } catch (e) {
+        console.warn("Popup blocked or error:", e);
+    }
+}
+
+// Helper: Format Bytes
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// ================= STABILITY HELPERS =================
+
+// Helper: Escape HTML to prevent XSS/broken layout
+function escapeHtml(text) {
+    if (!text) return "";
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// STABILITY: Limit DOM Elements
+function checkDOMLimit() {
+    try {
+        const MAX_MESSAGES = 200;
+        const allMessages = messages.getElementsByClassName("msg-container");
+        if (allMessages.length > MAX_MESSAGES) {
+            // Remove oldest 20 messages
+            for (let i = 0; i < 20; i++) {
+                if (allMessages[0]) messages.removeChild(allMessages[0]);
+            }
+        }
+    } catch (e) {
+        console.warn("DOM limit check failed:", e);
+    }
+}
+
+// Prevent Enter key in file input (safety)
+if (fileInput) {
+    fileInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") e.preventDefault();
+    });
+}
