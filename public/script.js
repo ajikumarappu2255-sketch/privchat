@@ -123,14 +123,23 @@ socket.on("privateMsg", data => {
         } catch (e) { /* Ignore regex error on old browsers */ }
 
         // CONSTRUCT HTML
-        // 🔹 FILE MESSAGE HANDLING (RESTORED)
+        // 🔹 FILE MESSAGE HANDLING
         if (text.includes("[[FILE_MSG]]")) {
             try {
                 const parts = text.split("[[FILE_MSG]]");
+                // parts[1] is the JSON
                 if (parts[1]) {
                     const fileData = JSON.parse(parts[1]);
                     p.classList.add("file-msg");
+
+                    let captionHtml = "";
+                    if (fileData.caption) {
+                        const parsedCaption = fileData.caption.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+                        captionHtml = `<div class="msg-caption">${parsedCaption}</div>`;
+                    }
+
                     p.innerHTML = getFileMessageHTML(fileData) +
+                        captionHtml +
                         (isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : "");
                 } else {
                     throw new Error("Empty file data");
@@ -140,6 +149,7 @@ socket.on("privateMsg", data => {
                 p.innerText = "Error loading attachment.";
             }
         } else {
+            // NORMAL TEXT MESSAGE
             p.innerHTML = `
                 ${replyHtml}
                 <span class="msg-text">${parsedText}</span>
@@ -270,11 +280,14 @@ socket.on("warningMsg", msg => {
 });
 
 // ================= SEND MESSAGE =================
+// ================= SEND MESSAGE (Updated for File) =================
 function sendMessage() {
     const msg = msgInput.value.trim();
-    if (!msg) return;
 
-    // 🔹 EDIT MODE
+    // Check if we have a file selected OR text to send
+    if (!msg && !selectedFile) return;
+
+    // 🔹 EDIT MODE (Only for text messages, cannot edit file msgs)
     if (isEditing && editingMessageId) {
         socket.emit("editMsg", { room, messageId: editingMessageId, newText: msg });
 
@@ -282,15 +295,12 @@ function sendMessage() {
         const p = myMessages[editingMessageId];
         if (p) {
             const textSpan = p.querySelector(".msg-text");
-            // ✅ Parse Mentions for Optimistic Edit
             const parsedText = msg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
             if (textSpan) textSpan.innerHTML = parsedText;
-
             const editedLabel = p.querySelector(".edited-label");
             if (editedLabel) editedLabel.style.display = "inline";
         }
 
-        // Reset
         isEditing = false;
         editingMessageId = null;
         sendBtn.innerText = "Send";
@@ -298,7 +308,7 @@ function sendMessage() {
         return;
     }
 
-    let finalMsg = msg; // Use finalMsg instead of msgInput.value
+    let finalMsg = msg;
 
     // ✅ Add reply prefix if replying
     if (replyToMessage) {
@@ -308,6 +318,20 @@ function sendMessage() {
 
     const messageId = Date.now() + "_" + Math.random().toString(36).slice(2);
 
+    // ================= CONSTRUCT PAYLOAD =================
+    let payloadMessage = "";
+
+    if (selectedFile) {
+        // 🔹 FILE + OPTIONAL CAPTION
+        selectedFile.caption = finalMsg; // Add text as caption
+        const fileJson = JSON.stringify(selectedFile);
+        payloadMessage = `[[FILE_MSG]]${fileJson}`;
+    } else {
+        // 🔹 TEXT ONLY
+        payloadMessage = finalMsg;
+    }
+    // =====================================================
+
     // Container
     const container = document.createElement("div");
     container.className = "msg-container self";
@@ -315,41 +339,54 @@ function sendMessage() {
     // ✅ Create Bubble
     const p = document.createElement("div");
     p.className = "msg-bubble self";
+    if (selectedFile) p.classList.add("file-msg"); // Specific class for files
     p.dataset.id = messageId;
 
-    // ✅ Parse
-    const parsedText = finalMsg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-    // Detect Emoji
-    const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
-    if (isEmoji) p.classList.add("emoji-msg");
-
-    // Check for reply prefix in finalMsg to split local display
-    let replyHtml = "";
-    let cleanText = finalMsg;
-
-    if (finalMsg.startsWith("Reply to:")) {
-        const match = finalMsg.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
-        if (match) {
-            replyHtml = `
-            <div class="reply-preview">
-                <strong>Replied to:</strong>
-                <span>${match[1]}</span>
-            </div>
-            `;
-            cleanText = match[2];
+    // ================= RENDER LOCAL BUBBLE =================
+    if (selectedFile) {
+        // Render File + Caption
+        let captionHtml = "";
+        if (selectedFile.caption) {
+            const parsedCaption = selectedFile.caption.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+            captionHtml = `<div class="msg-caption">${parsedCaption}</div>`;
         }
+
+        p.innerHTML = getFileMessageHTML(selectedFile) +
+            captionHtml +
+            `<span class="ticks" id="tick-${messageId}">✓</span>`;
+    } else {
+        // Render Text Only (Existing Logic)
+        const parsedText = finalMsg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+
+        // Detect Emoji
+        const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
+        if (isEmoji) p.classList.add("emoji-msg");
+
+        // Parse Reply
+        let replyHtml = "";
+        let cleanText = finalMsg;
+        if (finalMsg.startsWith("Reply to:")) {
+            const match = finalMsg.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
+            if (match) {
+                replyHtml = `
+                <div class="reply-preview">
+                    <strong>Replied to:</strong>
+                    <span>${escapeHtml(match[1])}</span>
+                </div>`;
+                cleanText = match[2];
+            }
+        }
+
+        const parsedCleanText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+
+        p.innerHTML = `
+            ${replyHtml}
+            <span class="msg-text">${parsedCleanText}</span>
+            <span class="ticks" id="tick-${messageId}">✓</span>
+            <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
+        `;
     }
-
-    // Re-parse the clean text for mentions
-    const parsedCleanText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-    p.innerHTML = `
-        ${replyHtml}
-        <span class="msg-text">${parsedCleanText}</span>
-        <span class="ticks" id="tick-${messageId}">✓</span>
-        <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
-    `;
+    // =====================================================
 
     // Menu (Inside bubble)
     const menuBtn = document.createElement("div");
@@ -363,29 +400,33 @@ function sendMessage() {
     const menu = document.createElement("div");
     menu.className = "msg-actions-menu";
     menu.id = `menu-${messageId}`;
-    menu.innerHTML = `
-      <p onclick="startEditMessage('${messageId}')">Edit</p>
-      <p onclick="deleteMessage('${messageId}')">Delete</p>
-    `;
+
+    // Only allow Delete for files (no edit)
+    let menuOpts = `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
+    if (!selectedFile) {
+        menuOpts = `<p onclick="startEditMessage('${messageId}')">Edit</p>` + menuOpts;
+    }
+    menu.innerHTML = menuOpts;
 
     p.appendChild(menuBtn);
     p.appendChild(menu);
-
     container.appendChild(p);
-
     messages.appendChild(container);
     messages.scrollTop = messages.scrollHeight;
 
     myMessages[messageId] = p;
 
+    // ✅ SEND TO SERVER
     socket.emit("privateMsg", {
         room,
-        message: `${username}: ${finalMsg}`,
+        message: `${username}: ${payloadMessage}`, // Prefixed with user for logic
         messageId,
         sender: socket.id
     });
 
+    // Reset Input & File Selection
     msgInput.value = "";
+    clearFileSelection(); // NEW: Clear file state
     stopTyping();
 }
 
@@ -594,14 +635,16 @@ messages.addEventListener("touchend", (e) => {
     }
 });
 
-// ================= FILE SENDING FEATURE (RESTORED) =================
+// ================= FILE SENDING FEATURE (DEFERRED SEND) =================
+let selectedFile = null; // Stores file until sent
 
-function safeClickFileInput() {
-    const fileInput = document.getElementById("fileInput");
-    if (fileInput) fileInput.click();
-}
-
+// DOM Elements for File
 const fileInput = document.getElementById("fileInput");
+const filePreview = document.getElementById("filePreview");
+const previewImg = document.getElementById("previewImg");
+const previewFileCard = document.getElementById("previewFileCard");
+const previewFileName = document.getElementById("previewFileName");
+
 if (fileInput) {
     fileInput.addEventListener("change", handleFileSelect);
 }
@@ -621,20 +664,95 @@ function handleFileSelect(e) {
     // 2. Read File
     const reader = new FileReader();
     reader.onload = function (event) {
-        const fileData = {
+        selectedFile = {
             name: file.name,
             type: file.type,
             size: formatBytes(file.size),
             data: event.target.result // Base64 string
         };
-        sendFile(fileData);
+        showPreview(selectedFile);
     };
-    reader.onerror = function (err) {
-        console.error("File read error:", err);
+    reader.onerror = function () {
         alert("Failed to read file.");
     };
     reader.readAsDataURL(file);
-    e.target.value = ""; // reset
+    e.target.value = ""; // reset input so same file can be selected again if cleared
+}
+
+function showPreview(file) {
+    filePreview.style.display = "flex";
+
+    if (file.type.startsWith("image/")) {
+        previewImg.src = file.data;
+        previewImg.style.display = "block";
+        previewFileCard.style.display = "none";
+    } else {
+        previewImg.style.display = "none";
+        previewFileCard.style.display = "flex";
+        previewFileName.textContent = file.name;
+    }
+
+    msgInput.focus(); // Focus input for caption
+}
+
+function clearFileSelection() {
+    selectedFile = null;
+    filePreview.style.display = "none";
+    previewImg.src = "";
+    if (fileInput) fileInput.value = "";
+}
+
+// Generate HTML for File Message
+function getFileMessageHTML(file) {
+    try {
+        if (!file || !file.type) return "<span>Unknown file</span>";
+
+        const { name, type, data, size } = file;
+
+        if (type.startsWith("image/")) {
+            return `<img src="${data}" alt="${escapeHtml(name)}" onclick="openMedia('${data}', 'image')">`;
+        }
+        else if (type.startsWith("video/")) {
+            return `<video src="${data}" controls></video>`;
+        }
+        else {
+            // Document / PDF / Other
+            return `
+                <a href="${data}" download="${escapeHtml(name)}" class="file-card">
+                    <span class="file-icon">📄</span>
+                    <div class="file-info">
+                        <div class="file-name">${escapeHtml(name)}</div>
+                        <div class="file-size">${size}</div>
+                    </div>
+                    <span>⬇️</span>
+                </a>
+            `;
+        }
+    } catch (e) {
+        return "<span>Error displaying file</span>";
+    }
+}
+
+// Helper: Open Media
+function openMedia(src, type) {
+    try {
+        const w = window.open("");
+        if (type === "image") {
+            w.document.write(`<img src="${src}" style="max-width:100%; height:auto;">`);
+        }
+    } catch (e) {
+        console.warn("Popup blocked:", e);
+    }
+}
+
+// Helper: Format Bytes
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 // Send File Message
