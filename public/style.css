@@ -896,7 +896,153 @@ body {
     }
 }
 
-/* ================= MENTION FEATURE ================= */
+/* ================= FILE SENDING STYLES (ADDED) ================= */
+
+/* Attachment Button */
+.attach-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    margin-right: 8px;
+    color: #555;
+    transition: color 0.2s;
+    padding: 0 5px;
+}
+
+.attach-btn:hover {
+    color: #007bff;
+}
+
+/* File Preview Container (Above Input) */
+.file-preview {
+    position: absolute;
+    bottom: 100%;
+    /* Sits directly above the input bar */
+    left: 0;
+    width: 100%;
+    background: #f9f9f9;
+    border-top: 1px solid #ddd;
+    padding: 10px;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+}
+
+.preview-content {
+    position: relative;
+    display: inline-block;
+}
+
+.preview-content img {
+    max-height: 100px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+
+.file-card-preview {
+    display: flex;
+    align-items: center;
+    background: #eee;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+}
+
+.remove-file-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: red;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Chat Bubble File Styles */
+.file-msg {
+    display: flex;
+    flex-direction: column;
+}
+
+.file-msg img,
+.file-msg video {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    cursor: pointer;
+}
+
+.file-card {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    margin-bottom: 5px;
+    transition: background 0.2s;
+}
+
+.file-card:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.file-icon {
+    font-size: 24px;
+    margin-right: 10px;
+}
+
+.file-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.file-name {
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: 11px;
+    color: #666;
+}
+
+.msg-caption {
+    margin-top: 4px;
+    font-size: 14.2px;
+    color: inherit;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .file-preview {
+        bottom: 100%;
+        width: 100%;
+    }
+
+    .file-msg img,
+    .file-msg video {
+        max-height: 200px;
+    }
+}
+
 .mention-dropdown {
     position: absolute;
     bottom: 55px;
