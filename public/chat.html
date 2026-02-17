@@ -42,8 +42,21 @@
                 <button onclick="cancelReply()">✖</button>
             </div>
 
+            <!-- ✅ Loading Overlay -->
+            <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+                <div class="spinner"></div>
+                <span>Sending File...</span>
+            </div>
+
             <!-- Input -->
             <div class="chat-input">
+
+                <!-- ✅ File Input (Hidden) -->
+                <input type="file" id="fileInput" multiple hidden
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip">
+
+                <!-- ✅ Attach Button -->
+                <button id="attachBtn" class="attach-btn">📎</button>
 
                 <!-- ✅ Emoji Button -->
                 <button id="emojiBtn" class="emoji-btn">😊</button>
