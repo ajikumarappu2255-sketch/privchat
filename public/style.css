@@ -798,8 +798,315 @@ body {
 }
 
 .emoji-picker:hover {
-    display: block;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
+
+/* ================================================= */
+/* ============== FILE SENDING FEATURE ============== */
+/* ================================================= */
+
+/* Attach Button */
+.attach-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    margin-right: 5px;
+    color: #555;
+    transition: transform 0.2s;
+}
+
+.attach-btn:hover {
+    transform: scale(1.1);
+    color: #333;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    font-size: 14px;
+    color: #333;
+    font-weight: bold;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* File Bubble Styles */
+.file-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+    width: 100%;
+}
+
+/* Images */
+.file-preview-img {
+    max-width: 100%;
+    max-height: 250px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Videos */
+.file-preview-video {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-bottom: 5px;
+}
+
+/* Audio */
+.file-preview-audio {
+    width: 100%;
+    max-width: 250px;
+    margin-bottom: 5px;
+}
+
+/* Generic Documents - Modern Card Style */
+.file-link {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #333;
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+    min-width: 200px;
+}
+
+.file-link:hover {
+    background: rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+
+/* Icon colors based on type expectation (generic here) */
+.file-icon {
+    font-size: 28px;
+    margin-right: 12px;
+    color: #e67e22;
+    /* Generic orange for files */
+}
+
+/* Specific icon colors can be added via JS classes if desired, but CSS simple version: */
+.file-link[href$=".pdf"] .file-icon {
+    color: #e74c3c;
+}
+
+.file-link[href$=".doc"] .file-icon,
+.file-link[href$=".docx"] .file-icon {
+    color: #3498db;
+}
+
+.file-link[href$=".zip"] .file-icon {
+    color: #f1c40f;
+}
+
+.file-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.file-name {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.file-type-size {
+    font-size: 11px;
+    color: #888;
+}
+
+.download-icon {
+    font-size: 20px;
+    color: #667eea;
+    margin-left: 10px;
+    opacity: 0.7;
+}
+
+.file-link:hover .download-icon {
+    opacity: 1;
+}
+
+/* Caption style */
+.file-caption {
+    margin-top: 6px;
+    font-size: 14px;
+    text-align: left;
+    width: 100%;
+    line-height: 1.4;
+}
+
+/* ================================================= */
+/* ============== FILE SENDING FEATURE ============== */
+/* ================================================= */
+
+/* Attach Button */
+.attach-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    margin-right: 5px;
+    color: #555;
+    transition: transform 0.2s;
+}
+
+.attach-btn:hover {
+    transform: scale(1.1);
+    color: #333;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    font-size: 14px;
+    color: #333;
+    font-weight: bold;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* File Bubble Styles */
+.file-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+}
+
+/* Images */
+.file-preview-img {
+    max-width: 100%;
+    max-height: 250px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Videos */
+.file-preview-video {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-bottom: 5px;
+}
+
+/* Audio */
+.file-preview-audio {
+    width: 200px;
+    margin-bottom: 5px;
+}
+
+/* Generic Documents */
+.file-link {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #333;
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    transition: background 0.2s;
+}
+
+.file-link:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.file-icon {
+    font-size: 24px;
+    margin-right: 10px;
+}
+
+.file-name {
+    font-size: 13px;
+    word-break: break-all;
+    flex: 1;
+}
+
+.download-icon {
+    font-size: 18px;
+    color: #667eea;
+}
+
+/* Caption style if needed */
+.file-caption {
+    margin-top: 5px;
+    font-size: 14px;
+    text-align: left;
+    width: 100%;
+}
+
+
 
 /* ================= FILE UPLOAD STYLES (RESTORED) ================= */
 
