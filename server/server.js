@@ -51,7 +51,7 @@ io.on("connection", socket => {
                 pending: {}
             };
             socket.join(room);
-            socket.emit("privateMsg", "ROOM OWNER: You created the room.");
+            socket.emit("privateMsg", "✅ Room created! You are the room owner.");
             broadcastRoomUsers(room);
             return;
         }
@@ -74,7 +74,7 @@ io.on("connection", socket => {
             socketId: socket.id
         });
 
-        socket.emit("privateMsg", "Waiting for owner approval...");
+        socket.emit("privateMsg", "⏳ Request sent. Waiting for owner approval...");
     });
 
     // ================= APPROVE / REJECT USER =================
@@ -89,7 +89,7 @@ io.on("connection", socket => {
         delete roomData.pending[socketId];
 
         io.sockets.sockets.get(socketId)?.join(room);
-        io.to(socketId).emit("privateMsg", "Owner approved your entry.");
+        io.to(socketId).emit("privateMsg", "✅ Approved! You have joined the room.");
         broadcastRoomUsers(room);
     });
 
@@ -98,7 +98,7 @@ io.on("connection", socket => {
         if (!roomData || socket.id !== roomData.ownerSocket) return;
 
         delete roomData.pending[socketId];
-        io.to(socketId).emit("warningMsg", "Owner rejected your request.");
+        io.to(socketId).emit("warningMsg", "❌ Request rejected by room owner.");
         io.sockets.sockets.get(socketId)?.disconnect();
     });
 
