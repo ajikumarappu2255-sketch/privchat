@@ -45,8 +45,15 @@
             <!-- Input -->
             <div class="chat-input">
 
+                <!-- ✅ Attachment Button -->
+                <button id="attachBtn" class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
+                <input type="file" id="fileInput" multiple style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt">
+
                 <!-- ✅ Emoji Button -->
                 <button id="emojiBtn" class="emoji-btn">😊</button>
+
+                <!-- ✅ File Preview Container -->
+                <div id="filePreviewContainer" class="file-preview-container"></div>
 
                 <!-- ✅ Emoji Picker -->
                 <div id="emojiPicker" class="emoji-picker">
