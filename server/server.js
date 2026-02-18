@@ -64,7 +64,22 @@ io.on("connection", socket => {
         }
 
         if (roomData.users[username]) {
-            socket.emit("warningMsg", "This username is already active in the room.");
+            // New logic: Allow session takeover (fixes auto-disconnect on reconnect)
+            const oldSocketId = roomData.users[username];
+
+            // Notify old socket
+            io.to(oldSocketId).emit("warningMsg", "You have connected from another device/tab. Disconnecting this session.");
+
+            // Disconnect old socket (forcefully)
+            io.sockets.sockets.get(oldSocketId)?.disconnect(true);
+
+            // Update new socket
+            roomData.users[username] = socket.id;
+            socket.join(room);
+
+            // Notify new socket
+            socket.emit("privateMsg", "Restored session for " + username);
+            broadcastRoomUsers(room);
             return;
         }
 
