@@ -193,8 +193,15 @@ socket.on("editMsg", ({ messageId, newText }) => {
         // ✅ Parse Mentions for Edit
         const parsedText = newText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 
-        if (textSpan) textSpan.innerHTML = parsedText;
-        else p.innerHTML = parsedText; // fallback if older structure
+        if (textSpan) {
+            // Check for media content (files)
+            const media = textSpan.querySelector(".media-content");
+            const mediaHtml = media ? media.outerHTML : "";
+
+            textSpan.innerHTML = mediaHtml + parsedText;
+        } else {
+            p.innerHTML = parsedText; // fallback
+        }
 
         // Show edited label
         const editedLabel = p.querySelector(".edited-label");
@@ -241,7 +248,16 @@ function sendMessage() {
             const textSpan = p.querySelector(".msg-text");
             // ✅ Parse Mentions for Optimistic Edit
             const parsedText = msg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-            if (textSpan) textSpan.innerHTML = parsedText;
+
+            if (textSpan) {
+                // Check for media content (files)
+                const media = textSpan.querySelector(".media-content");
+                const mediaHtml = media ? media.outerHTML : "";
+
+                textSpan.innerHTML = mediaHtml + parsedText;
+            } else {
+                p.innerHTML = parsedText; // fallback
+            }
 
             const editedLabel = p.querySelector(".edited-label");
             if (editedLabel) editedLabel.style.display = "inline";
@@ -713,13 +729,8 @@ async function sendMessage() {
         // Process Files
         for (const file of selectedFiles) {
             const base64Data = await fileToBase64(file);
-            // Escape filename to prevent HTML attribute breakage and mention conflicts
-            const safeName = file.name.replace(/&/g, "&amp;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/@/g, "&#64;"); // Prevent @mention trigger
+            // Escape filename
+            const safeName = file.name.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;");
 
             if (file.type.startsWith("image/")) {
                 fileHtmlContent += `<img src="${base64Data}" class="chat-media" onclick="viewMedia(this.src, 'image')"><br>`;
@@ -747,27 +758,16 @@ async function sendMessage() {
         return;
     }
 
-    // Combine Text + Files
-    // Structure: Files first, then text? Or text then files? 
-    // Requirement: "Preview ABOVE text box". 
-    // Usually in chat, media comes first or mixed. Let's put media on top.
-
-    let combinedMsg = "";
+    // Wrap files in a container if they exist
     if (fileHtmlContent) {
-        combinedMsg += fileHtmlContent;
-    }
-    if (msgText) {
-        combinedMsg += msgText;
+        fileHtmlContent = `<span class="media-content" style="display:block;">${fileHtmlContent}</span>`;
     }
 
+    let combinedMsg = fileHtmlContent + msgText;
     let finalMsg = combinedMsg;
 
     // ✅ Add reply prefix if replying
     if (replyToMessage) {
-        // Reply logic uses "Reply to: ..." prefix string. 
-        // This might look ugly with large base64 strings if not careful.
-        // But backend just broadcasts "message".
-        // The display logic parses "Reply to: " at start.
         finalMsg = `Reply to: "${replyToMessage}"\n${finalMsg}`;
         cancelReply();
     }
@@ -783,22 +783,13 @@ async function sendMessage() {
     p.className = "msg-bubble self";
     p.dataset.id = messageId;
 
-    // ✅ Parse Text (Only parse mentions in the text part, not the base64 part!)
-    // Base64 doesn't contain @ usually (it might). 
-    // Safer: Parse mentions only on valid text segments.
-    // For now, simple replacement on whole string might be risky for base64.
-    // However, base64 is inside src="..." attributes.
-    // Regex `/@(\w+)/g` might match inside base64.
-    // FIX: Only run mention parser on the text content, NOT the HTML content.
-    // BUT we are building HTML string... 
-    // Let's rely on standard text replacement. 
-    // The previous implementation did `finalMsg.replace(...)`.
-    // We should probably NOT replace in `finalMsg` if it contains HTML tags.
-    // Helper to format display text
+    // Detect Emoji
+    // Warning: Regex might match base64. Only run emoji check on text part? 
+    // Ideally we skip emoji class if it has files.
+    const isEmoji = !fileHtmlContent && /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(msgText);
+    if (isEmoji) p.classList.add("emoji-msg");
 
-    let displayContent = finalMsg;
-
-    // Check if reply
+    // Reply Logic
     let replyHtml = "";
     let cleanContent = finalMsg;
 
@@ -815,32 +806,18 @@ async function sendMessage() {
         }
     }
 
-    // Parse Mentions in cleanContent? 
-    // Caution: cleanContent now contains HTML tags from files.
-    // We should parse mentions only in the TEXT part.
-    // How to distinguish? Data is mixed.
-    // Hack: Replace mentions BEFORE adding files?
-    // YES.
-
-    let parsedTextPart = msgText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-    let finalDisplayHtml = fileHtmlContent + (parsedTextPart ? `<span class="msg-text">${parsedTextPart}</span>` : "");
-
-    // Add Reply HTML wrapper
-    // Wait, the existing logic expects `finalMsg` to be sent to server.
-    // Server just broadcasts it.
-    // Receiver renders it.
-    // Receiver does: `const parsedText = cleanText.replace(/@(\w+)/g, ...)`
-    // This WILL break base64 strings if they contain @...
-    // Base64 char set: A-Z, a-z, 0-9, +, /
-    // It does NOT contain @. So it is SAFE!
-
+    // Parse Mentions (only in text)
+    // We assume cleanContent = <span class="media-content">...</span> text
+    // We can't easily split it safely with regex since HTML nests.
+    // BUT we know we constructed it as fileHtmlContent + msgText.
+    // Simplification: just parse mentions in the WHOLE string. 
+    // Base64 is safe (no @).
     const parsedCleanText = cleanContent.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 
+    // Structural Fix: Use .msg-text to match receiver logic
     p.innerHTML = `
         ${replyHtml}
-        <div class="msg-content-wrapper">
-             ${parsedCleanText /* This contains the Image HTML + Text */}
-        </div>
+        <span class="msg-text">${parsedCleanText}</span>
         <span class="ticks" id="tick-${messageId}">✓</span>
         <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
     `;
@@ -866,7 +843,7 @@ async function sendMessage() {
     p.appendChild(menu);
 
     container.appendChild(p);
-    messages.appendChild(container);
+    messages.appendChild(container); // Append properly
     messages.scrollTop = messages.scrollHeight;
 
     myMessages[messageId] = p;
