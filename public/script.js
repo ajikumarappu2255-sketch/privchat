@@ -1,10 +1,3 @@
-// ================= GLOBAL ERROR HANDLER (STABILITY) =================
-window.onerror = function (msg, url, lineNo, columnNo, error) {
-    console.error("Global Error Caught:", msg, "Line:", lineNo, "Error:", error);
-    // Prevent white screen by suppressing the error and keeping UI alive
-    return true;
-};
-
 // ================= SOCKET CONNECTION =================
 const socket = io("https://privchat-production.up.railway.app", {
     transports: ["websocket", "polling"],
@@ -40,7 +33,6 @@ let typingIndicator = document.getElementById("typingIndicator");
 // 🔹 ADDED (Feature 2): store my sent messages
 const myMessages = {}; // messageId => <p>
 
-
 // 🔹 ADDED (Edit/Delete):
 let isEditing = false;
 let editingMessageId = null;
@@ -60,96 +52,97 @@ socket.emit("joinRoom", { username, room, token });
 
 // ================= RECEIVE PRIVATE MESSAGE =================
 socket.on("privateMsg", data => {
-    try {
-        if (!data) return;
 
-        let text, messageId, sender;
-        if (typeof data === "string") {
-            text = data;
-        } else {
-            text = data.message || "";
-            messageId = data.messageId;
-            sender = data.sender;
-        }
+    let text, messageId, sender;
 
-        if (typeof text !== "string") text = String(text);
+    if (typeof data === "string") {
+        text = data;
+    } else {
+        text = data.message;
+        messageId = data.messageId;
+        sender = data.sender;
+    }
 
-        const isMe = text.startsWith(username + ":");
-        if (isMe && messageId && myMessages[messageId]) return;
+    const isMe = text.startsWith(username + ":");
+    if (isMe && messageId && myMessages[messageId]) return;
 
-        checkDOMLimit();
+    // Container
+    const container = document.createElement("div");
+    container.className = isMe ? "msg-container self" : "msg-container";
 
-        const container = document.createElement("div");
-        container.className = isMe ? "msg-container self" : "msg-container";
+    // ✅ PARSE REPLY (Regex to separate reply header)
+    let replyHtml = "";
+    let cleanText = text;
 
-        let cleanText;
-        if (isMe) cleanText = text.substring(username.length + 2);
-        else cleanText = text.substring(text.indexOf(":") + 2);
-
-        let replyHtml = "";
-        try {
-            const replyMatch = cleanText.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
-            if (replyMatch) {
-                const replyContent = replyMatch[1] || "...";
-                cleanText = replyMatch[2] || "";
-                replyHtml = `
-                    <div class="reply-preview">
-                        <strong>Replied to:</strong>
-                        <span>${escapeHtml(replyContent)}</span>
-                    </div>
-                `;
-            }
-        } catch (e) { console.warn("Reply parse error", e); }
-
-        const parsedText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-        const p = document.createElement("div");
-        p.className = isMe ? "msg-bubble self" : "msg-bubble";
-        if (messageId) p.dataset.id = messageId;
-
-        try {
-            const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
-            if (isEmoji) p.classList.add("emoji-msg");
-        } catch (e) { }
-
-        p.innerHTML = `
-            ${replyHtml}
-            <span class="msg-text">${parsedText}</span>
-            ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
-            <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
+    // Regex to match "Reply to: "quoted"\nActual message"
+    const replyMatch = text.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
+    if (replyMatch) {
+        const replyContent = replyMatch[1];
+        cleanText = replyMatch[2];
+        replyHtml = `
+            <div class="reply-preview">
+                <strong>Replied to:</strong>
+                <span>${replyContent}</span>
+            </div>
         `;
+    }
 
-        // Menu
-        if (isMe && messageId) {
-            const menuBtn = document.createElement("div");
-            menuBtn.className = isMe ? "msg-actions-btn" : "msg-actions-btn left-btn";
-            menuBtn.innerHTML = "⋮";
-            menuBtn.onclick = (e) => {
-                e.stopPropagation();
-                toggleMsgMenu(messageId);
-            };
+    // ✅ Parse Mentions
+    const parsedText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 
-            const menu = document.createElement("div");
-            menu.className = "msg-actions-menu";
-            menu.id = `menu-${messageId}`;
-            menu.innerHTML = `<p onclick="startEditMessage('${messageId}')">Edit</p>
-                              <p onclick="deleteMessage('${messageId}')">Delete</p>`;
+    // Message Bubble
+    const p = document.createElement("div"); // Changed to div
+    p.className = isMe ? "msg-bubble self" : "msg-bubble"; // New class
+    if (messageId) p.dataset.id = messageId;
 
-            p.appendChild(menuBtn);
-            p.appendChild(menu);
+    // Detect Emoji-Only (Basic Regex)
+    const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
+    if (isEmoji) p.classList.add("emoji-msg");
+
+    // CONSTRUCT HTML
+    p.innerHTML = `
+        ${replyHtml}
+        <span class="msg-text">${parsedText}</span>
+        ${isMe ? `<span class="ticks" id="tick-${messageId}">✓</span>` : ""}
+        <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
+    `;
+
+    // MENU (Inside bubble for better positioning)
+    // MENU (Inside bubble for better positioning)
+    // ✅ PERMISSION FIX: Only show menu if I am the sender
+    if (isMe && messageId) {
+        const menuBtn = document.createElement("div");
+        menuBtn.className = isMe ? "msg-actions-btn" : "msg-actions-btn left-btn"; // Position check
+        menuBtn.innerHTML = "⋮";
+        menuBtn.onclick = (e) => {
+            e.stopPropagation();
+            toggleMsgMenu(messageId);
+        };
+
+        const menu = document.createElement("div");
+        menu.className = "msg-actions-menu";
+        menu.id = `menu-${messageId}`;
+
+        let menuOptions = '';
+        if (isMe) {
+            menuOptions += `<p onclick="startEditMessage('${messageId}')">Edit</p>`;
         }
+        menuOptions += `<p onclick="deleteMessage('${messageId}')">Delete</p>`;
 
-        container.appendChild(p);
-        messages.appendChild(container);
-        messages.scrollTop = messages.scrollHeight;
+        menu.innerHTML = menuOptions;
 
-        if (messageId) myMessages[messageId] = p;
+        p.appendChild(menuBtn);
+        p.appendChild(menu);
+    }
 
-        if (!isMe && messageId) {
-            socket.emit("messageRead", { room, messageId, username });
-        }
-    } catch (err) {
-        console.error("Critical Error in privateMsg handler:", err);
+    container.appendChild(p);
+    messages.appendChild(container); // Standard append
+    messages.scrollTop = messages.scrollHeight;
+
+    myMessages[messageId] = p; // Store the bubble
+
+    if (!isMe && messageId) {
+        socket.emit("messageRead", { room, messageId, username });
     }
 });
 
@@ -234,22 +227,27 @@ socket.on("warningMsg", msg => {
 });
 
 // ================= SEND MESSAGE =================
-async function sendMessage() {
+function sendMessage() {
     const msg = msgInput.value.trim();
+    if (!msg) return;
 
+    // 🔹 EDIT MODE
     if (isEditing && editingMessageId) {
-        if (!msg) return;
         socket.emit("editMsg", { room, messageId: editingMessageId, newText: msg });
 
+        // Optimistic update
         const p = myMessages[editingMessageId];
         if (p) {
             const textSpan = p.querySelector(".msg-text");
+            // ✅ Parse Mentions for Optimistic Edit
             const parsedText = msg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
             if (textSpan) textSpan.innerHTML = parsedText;
+
             const editedLabel = p.querySelector(".edited-label");
             if (editedLabel) editedLabel.style.display = "inline";
         }
 
+        // Reset
         isEditing = false;
         editingMessageId = null;
         sendBtn.innerText = "Send";
@@ -257,9 +255,9 @@ async function sendMessage() {
         return;
     }
 
-    if (!msg) return;
+    let finalMsg = msg; // Use finalMsg instead of msgInput.value
 
-    let finalMsg = msg;
+    // ✅ Add reply prefix if replying
     if (replyToMessage) {
         finalMsg = `Reply to: "${replyToMessage}"\n${msg}`;
         cancelReply();
@@ -267,33 +265,40 @@ async function sendMessage() {
 
     const messageId = Date.now() + "_" + Math.random().toString(36).slice(2);
 
-    // Optimistic UI
+    // Container
     const container = document.createElement("div");
     container.className = "msg-container self";
 
+    // ✅ Create Bubble
     const p = document.createElement("div");
     p.className = "msg-bubble self";
     p.dataset.id = messageId;
 
+    // ✅ Parse
     const parsedText = finalMsg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 
+    // Detect Emoji
     const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
     if (isEmoji) p.classList.add("emoji-msg");
 
+    // Check for reply prefix in finalMsg to split local display
     let replyHtml = "";
     let cleanText = finalMsg;
+
     if (finalMsg.startsWith("Reply to:")) {
         const match = finalMsg.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
         if (match) {
             replyHtml = `
             <div class="reply-preview">
                 <strong>Replied to:</strong>
-                <span>${escapeHtml(match[1])}</span>
-            </div>`;
+                <span>${match[1]}</span>
+            </div>
+            `;
             cleanText = match[2];
         }
     }
 
+    // Re-parse the clean text for mentions
     const parsedCleanText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 
     p.innerHTML = `
@@ -303,6 +308,7 @@ async function sendMessage() {
         <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
     `;
 
+    // Menu (Inside bubble)
     const menuBtn = document.createElement("div");
     menuBtn.className = "msg-actions-btn";
     menuBtn.innerHTML = "⋮";
@@ -314,12 +320,16 @@ async function sendMessage() {
     const menu = document.createElement("div");
     menu.className = "msg-actions-menu";
     menu.id = `menu-${messageId}`;
-    menu.innerHTML = `<p onclick="startEditMessage('${messageId}')">Edit</p>
-                      <p onclick="deleteMessage('${messageId}')">Delete</p>`;
+    menu.innerHTML = `
+      <p onclick="startEditMessage('${messageId}')">Edit</p>
+      <p onclick="deleteMessage('${messageId}')">Delete</p>
+    `;
 
     p.appendChild(menuBtn);
     p.appendChild(menu);
+
     container.appendChild(p);
+
     messages.appendChild(container);
     messages.scrollTop = messages.scrollHeight;
 
@@ -540,39 +550,3 @@ messages.addEventListener("touchend", (e) => {
         replyBox.style.display = "flex";
     }
 });
-
-
-
-
-// ================= STABILITY HELPERS =================
-
-// Helper: Escape HTML to prevent XSS/broken layout
-function escapeHtml(text) {
-    if (!text) return "";
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-// STABILITY: Limit DOM Elements
-function checkDOMLimit() {
-    try {
-        const MAX_MESSAGES = 200;
-        const allMessages = messages.getElementsByClassName("msg-container");
-        if (allMessages.length > MAX_MESSAGES) {
-            // Remove oldest 20 messages
-            for (let i = 0; i < 20; i++) {
-                if (allMessages[0]) messages.removeChild(allMessages[0]);
-            }
-        }
-    } catch (e) {
-        console.warn("DOM limit check failed:", e);
-    }
-}
-
-
-
-
