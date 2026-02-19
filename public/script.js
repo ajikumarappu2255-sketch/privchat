@@ -8,43 +8,7 @@ const room = localStorage.getItem("room");
 const token = localStorage.getItem("token");
 
 
-// Connection Status Toast
-const statusToast = document.createElement("div");
-statusToast.style.position = "fixed";
-statusToast.style.top = "10px";
-statusToast.style.left = "50%";
-statusToast.style.transform = "translateX(-50%)";
-statusToast.style.padding = "8px 16px";
-statusToast.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-statusToast.style.color = "white";
-statusToast.style.borderRadius = "20px";
-statusToast.style.fontSize = "12px";
-statusToast.style.zIndex = "10000";
-statusToast.style.display = "none";
-document.body.appendChild(statusToast);
 
-function showStatus(msg, color = "rgba(0,0,0,0.7)") {
-    statusToast.innerText = msg;
-    statusToast.style.backgroundColor = color;
-    statusToast.style.display = "block";
-}
-
-function hideStatus() {
-    statusToast.style.display = "none";
-}
-
-socket.on("connect", () => {
-    showStatus("Connected", "green");
-    setTimeout(hideStatus, 2000);
-});
-
-socket.on("disconnect", () => {
-    showStatus("Disconnected. Reconnecting...", "red");
-});
-
-socket.on("connect_error", () => {
-    showStatus("Connection Issue...", "orange");
-});
 
 // Redirect if missing login info
 if (!username || !room || !token) {
