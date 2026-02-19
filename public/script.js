@@ -7,6 +7,45 @@ const username = localStorage.getItem("username");
 const room = localStorage.getItem("room");
 const token = localStorage.getItem("token");
 
+
+// Connection Status Toast
+const statusToast = document.createElement("div");
+statusToast.style.position = "fixed";
+statusToast.style.top = "10px";
+statusToast.style.left = "50%";
+statusToast.style.transform = "translateX(-50%)";
+statusToast.style.padding = "8px 16px";
+statusToast.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+statusToast.style.color = "white";
+statusToast.style.borderRadius = "20px";
+statusToast.style.fontSize = "12px";
+statusToast.style.zIndex = "10000";
+statusToast.style.display = "none";
+document.body.appendChild(statusToast);
+
+function showStatus(msg, color = "rgba(0,0,0,0.7)") {
+    statusToast.innerText = msg;
+    statusToast.style.backgroundColor = color;
+    statusToast.style.display = "block";
+}
+
+function hideStatus() {
+    statusToast.style.display = "none";
+}
+
+socket.on("connect", () => {
+    showStatus("Connected", "green");
+    setTimeout(hideStatus, 2000);
+});
+
+socket.on("disconnect", () => {
+    showStatus("Disconnected. Reconnecting...", "red");
+});
+
+socket.on("connect_error", () => {
+    showStatus("Connection Issue...", "orange");
+});
+
 // Redirect if missing login info
 if (!username || !room || !token) {
     window.location.href = "login.html";
@@ -531,9 +570,20 @@ messages.addEventListener("dblclick", (e) => {
     if (!msg) return;
 
     // ======= IMPROVED CLEAN MESSAGE LOGIC =======
-    // Only grab .msg-text content, ignoring ticks/menu/reply-preview
     const textSpan = msg.querySelector(".msg-text");
-    replyToMessage = textSpan ? textSpan.innerText.trim() : msg.innerText.trim();
+    const media = textSpan ? textSpan.querySelector(".media-content") : null;
+
+    let replyContent = "";
+
+    if (media) {
+        if (media.querySelector("img")) replyContent = "📷 Photo";
+        else if (media.querySelector("video")) replyContent = "🎥 Video";
+        else if (media.querySelector("audio")) replyContent = "🎵 Audio";
+        else if (media.querySelector(".chat-file")) replyContent = "📁 File";
+    }
+
+    const textOnly = textSpan ? textSpan.innerText.replace(replyContent, "").trim() : msg.innerText.trim();
+    replyToMessage = replyContent ? (textOnly ? `${replyContent} ${textOnly}` : replyContent) : textOnly;
     // ============================================
 
     const replyBox = document.getElementById("replyBox");
@@ -556,7 +606,19 @@ messages.addEventListener("touchend", (e) => {
     if (endX - startX > 80) { // swipe right threshold
         // ======= IMPROVED CLEAN MESSAGE LOGIC =======
         const textSpan = msg.querySelector(".msg-text");
-        replyToMessage = textSpan ? textSpan.innerText.trim() : msg.innerText.trim();
+        const media = textSpan ? textSpan.querySelector(".media-content") : null;
+
+        let replyContent = "";
+
+        if (media) {
+            if (media.querySelector("img")) replyContent = "📷 Photo";
+            else if (media.querySelector("video")) replyContent = "🎥 Video";
+            else if (media.querySelector("audio")) replyContent = "🎵 Audio";
+            else if (media.querySelector(".chat-file")) replyContent = "📁 File";
+        }
+
+        const textOnly = textSpan ? textSpan.innerText.replace(replyContent, "").trim() : msg.innerText.trim();
+        replyToMessage = replyContent ? (textOnly ? `${replyContent} ${textOnly}` : replyContent) : textOnly;
         // ============================================
 
         const replyBox = document.getElementById("replyBox");
