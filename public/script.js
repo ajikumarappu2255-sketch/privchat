@@ -269,7 +269,11 @@ socket.on("joinRequest", ({ username, socketId }) => {
 // ================= WARNING MESSAGE =================
 socket.on("warningMsg", msg => {
     messages.innerHTML += `<div class="msg-bubble warning">${msg}</div>`;
-    setTimeout(logout, 1500);
+    // Only log out on definitive rejection/closure messages
+    const shouldLogout = msg.includes("rejected") || msg.includes("Room closed") || msg.includes("another device");
+    if (shouldLogout) {
+        setTimeout(logout, 1500);
+    }
 });
 
 // ================= SEND MESSAGE =================
@@ -637,7 +641,31 @@ messages.addEventListener("touchend", (e) => {
 let selectedFiles = [];
 const fileInput = document.getElementById("fileInput");
 const filePreviewContainer = document.getElementById("filePreviewContainer");
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 2; // Keep base64 payload under ~2.7MB per file
+
+// Show in-chat warning without disconnecting
+function showFileWarning(msg) {
+    const warn = document.createElement("div");
+    warn.style.cssText = `
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ff4444;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: bold;
+        z-index: 99999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        text-align: center;
+        max-width: 90%;
+    `;
+    warn.innerText = "⚠️ " + msg;
+    document.body.appendChild(warn);
+    setTimeout(() => warn.remove(), 3500);
+}
 
 // 1. Listen for file selection
 fileInput.addEventListener("change", (e) => {
@@ -647,8 +675,8 @@ fileInput.addEventListener("change", (e) => {
     // Validate and add files
     files.forEach(file => {
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-            alert(`File "${file.name}" exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
-            return;
+            showFileWarning(`"${file.name}" is too large. Max file size is ${MAX_FILE_SIZE_MB}MB.`);
+            return; // Skip this file, user stays in chat
         }
         selectedFiles.push(file);
     });
