@@ -3,6 +3,7 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
     maxHttpBufferSize: 5e7, // 50MB
+    pingTimeout: 60000, // 60 seconds (prevents disconnect during upload)
     cors: {
         origin: ["https://privchat-pi.vercel.app"],
         methods: ["GET", "POST"]
