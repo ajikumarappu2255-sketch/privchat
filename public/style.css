@@ -1024,3 +1024,33 @@ audio.chat-media {
         /* Full width on mobile */
     }
 }
+
+/* ================= MOBILE UI IMPROVEMENTS ================= */
+@media (max-width: 480px) {
+    .chat-input {
+        padding: 6px; /* Save space */
+        align-items: center;
+    }
+
+    .chat-input input {
+        padding: 10px 12px;
+        font-size: 14px;
+        min-width: 0; /* Prevent flex overflow */
+    }
+
+    /* Larger touch targets for buttons */
+    .attach-btn, .emoji-btn {
+        font-size: 24px;
+        margin-right: 4px;
+        padding: 4px;
+        min-width: 30px;
+        text-align: center;
+    }
+
+    #sendBtn {
+        min-width: 55px;
+        margin-left: 6px;
+        font-size: 13px;
+        padding: 0 10px;
+    }
+}
