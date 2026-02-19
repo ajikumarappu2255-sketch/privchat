@@ -170,11 +170,17 @@ function startEditMessage(id) {
     if (!p) return;
 
     const textSpan = p.querySelector(".msg-text");
-    const text = textSpan ? textSpan.innerText : p.innerText; // fallback
+    if (textSpan) {
+        // Clone the span and remove the media-content child so we only get the text
+        const clone = textSpan.cloneNode(true);
+        const mediaInClone = clone.querySelector(".media-content");
+        if (mediaInClone) mediaInClone.remove();
+        msgInput.value = clone.innerText.trim();
+    } else {
+        msgInput.value = p.innerText.trim();
+    }
 
-    msgInput.value = text;
     msgInput.focus();
-
     isEditing = true;
     editingMessageId = id;
     sendBtn.innerText = "Update";
@@ -751,9 +757,12 @@ async function sendMessage() {
             // BEST PRACTICE: Put files as separate block inside bubble.
 
             if (textSpan) {
-                textSpan.innerHTML = parsedText;
+                // Preserve any media-content (files/images) — only update text part
+                const media = textSpan.querySelector(".media-content");
+                const mediaHtml = media ? media.outerHTML : "";
+                textSpan.innerHTML = mediaHtml + parsedText;
             } else {
-                // Fallback (older messages)
+                // Fallback (older messages with no textSpan)
                 p.innerHTML = parsedText;
             }
 
