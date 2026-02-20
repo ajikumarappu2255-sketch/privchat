@@ -1024,121 +1024,15 @@ audio.chat-media {
     color: #666;
 }
 
-
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .file-preview-container {
         bottom: 110%;
+        /* Adjust for mobile keyboard handling if needed */
     }
 
     audio.chat-media {
         width: 100%;
+        /* Full width on mobile */
     }
-}
-
-/* ================= SECURITY MONITORING CSS ================= */
-
-/* Blur the chat app when a warning fires */
-.chat-blurred .chat-container {
-    filter: blur(6px);
-    transition: filter 0.3s ease;
-    pointer-events: none;
-    user-select: none;
-}
-
-/* Security overlay — full screen */
-.security-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(10, 0, 0, 0.75);
-    z-index: 99998;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: secFadeIn 0.3s ease;
-}
-
-@keyframes secFadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-/* Warning card */
-.security-overlay-box {
-    background: #1a0000;
-    border: 2px solid #ff3333;
-    border-radius: 16px;
-    padding: 32px 40px;
-    text-align: center;
-    max-width: 340px;
-    width: 90%;
-    box-shadow: 0 0 40px rgba(255, 50, 50, 0.4);
-}
-
-.security-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-}
-
-.security-title {
-    color: #ff4444;
-    font-size: 18px;
-    font-weight: bold;
-    margin: 0 0 8px;
-}
-
-.security-msg {
-    color: #ffaaaa;
-    font-size: 14px;
-    margin: 0 0 10px;
-    line-height: 1.5;
-}
-
-.security-count {
-    color: #ff8888;
-    font-size: 13px;
-    font-weight: bold;
-    margin: 0;
-}
-
-/* Diagonal watermark — covers full screen, non-interactive */
-.chat-watermark {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    overflow: hidden;
-    opacity: 0.045;
-}
-
-.watermark-tile {
-    position: absolute;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-    transform: rotate(-30deg);
-    transform-origin: center;
-    user-select: none;
-    letter-spacing: 1px;
-}
-
-/* Owner notices for security events (chat bubble style) */
-.security-notice {
-    background: rgba(255, 80, 80, 0.15);
-    border-left: 3px solid #ff4444;
-    color: #ff8888;
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    margin: 4px auto;
-    max-width: 80%;
-    text-align: center;
 }
