@@ -46,8 +46,10 @@
             <div class="chat-input">
 
                 <!-- ✅ Attachment Button -->
-                <button id="attachBtn" class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
-                <input type="file" id="fileInput" multiple style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt">
+                <button id="attachBtn" class="attach-btn"
+                    onclick="document.getElementById('fileInput').click()">📎</button>
+                <input type="file" id="fileInput" multiple style="display: none;"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt">
 
                 <!-- ✅ Emoji Button -->
                 <button id="emojiBtn" class="emoji-btn">😊</button>
@@ -78,6 +80,8 @@
         </div>
     </div>
 
+    <!-- Supabase JS client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- JS -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="script.js"></script>
