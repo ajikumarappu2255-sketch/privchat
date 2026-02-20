@@ -7,6 +7,12 @@ const username = localStorage.getItem("username");
 const room = localStorage.getItem("room");
 const token = localStorage.getItem("token");
 
+// ================= SUPABASE INIT =================
+// Supabase client for file storage (does NOT touch any chat/socket logic)
+const SUPABASE_URL = "https://zmntcnftwrfdxdrcizmp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptbnRjbmZ0d3JmZHhkcmNpem1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1ODQ2NDAsImV4cCI6MjA4NzE2MDY0MH0.duQkcgsjIQ1-LlpEqcnD3mOaC0jOCB8K1oTGdQqoXx0";
+const SUPABASE_BUCKET = "chat-files";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
 
@@ -611,7 +617,7 @@ messages.addEventListener("touchend", (e) => {
 let selectedFiles = [];
 const fileInput = document.getElementById("fileInput");
 const filePreviewContainer = document.getElementById("filePreviewContainer");
-const MAX_FILE_SIZE_MB = 2; // Keep base64 payload under ~2.7MB per file
+const MAX_FILE_SIZE_MB = 50; // Supabase handles large files — no base64 limit
 
 // Show in-chat warning without disconnecting
 function showFileWarning(msg) {
@@ -716,14 +722,35 @@ function getFileIcon(type) {
     return "📁";
 }
 
-// 3. Convert File to Base64
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-    });
+// ================= SUPABASE FILE UPLOAD =================
+// Uploads a file to Supabase Storage and returns the public URL.
+// Replaces the old fileToBase64 approach — only this function changes.
+async function uploadToSupabase(file) {
+    // Sanitize filename: remove spaces and special characters
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uploadPath = `${Date.now()}-${safeName}`;
+
+    // Upload to Supabase bucket
+    const { data, error } = await supabaseClient
+        .storage
+        .from(SUPABASE_BUCKET)
+        .upload(uploadPath, file, {
+            cacheControl: "3600",
+            upsert: false
+        });
+
+    if (error) {
+        console.error("Supabase upload error:", error.message);
+        throw new Error("Upload failed: " + error.message);
+    }
+
+    // Get the public URL
+    const { data: urlData } = supabaseClient
+        .storage
+        .from(SUPABASE_BUCKET)
+        .getPublicUrl(uploadPath);
+
+    return urlData.publicUrl;
 }
 
 // ================= UPDATE SEND MESSAGE =================
@@ -789,22 +816,25 @@ async function sendMessage() {
     let fileHtmlContent = "";
 
     try {
-        // Process Files
+        // ===== SUPABASE UPLOAD: replaces old fileToBase64 approach =====
         for (const file of selectedFiles) {
-            const base64Data = await fileToBase64(file);
-            // Escape filename
+            // Upload to Supabase and get public URL
+            const publicUrl = await uploadToSupabase(file);
+
+            // Escape filename for safe display
             const safeName = file.name.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;");
 
+            // Build file HTML using the public URL (same structure as before)
             if (file.type.startsWith("image/")) {
-                fileHtmlContent += `<img src="${base64Data}" class="chat-media" onclick="viewMedia(this.src, 'image')"><br>`;
+                fileHtmlContent += `<img src="${publicUrl}" class="chat-media" onclick="viewMedia(this.src, 'image')"><br>`;
             } else if (file.type.startsWith("video/")) {
-                fileHtmlContent += `<video src="${base64Data}" controls class="chat-media"></video><br>`;
+                fileHtmlContent += `<video src="${publicUrl}" controls class="chat-media"></video><br>`;
             } else if (file.type.startsWith("audio/")) {
-                fileHtmlContent += `<audio src="${base64Data}" controls class="chat-media"></audio><br>`;
+                fileHtmlContent += `<audio src="${publicUrl}" controls class="chat-media"></audio><br>`;
             } else {
-                // Document/File
+                // Document / PDF / other
                 fileHtmlContent += `
-                <a href="${base64Data}" download="${safeName}" class="chat-file">
+                <a href="${publicUrl}" download="${safeName}" target="_blank" class="chat-file">
                     <div class="chat-file-icon">${getFileIcon(file.type)}</div>
                     <div class="chat-file-info">
                         <span class="chat-file-name">${safeName}</span>
@@ -813,9 +843,10 @@ async function sendMessage() {
                 </a><br>`;
             }
         }
+        // ===== END SUPABASE UPLOAD =====
     } catch (err) {
-        console.error("File processing error", err);
-        alert("Error processing files.");
+        console.error("File upload error", err);
+        showFileWarning("Upload failed. Check your connection and try again.");
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
         return;
