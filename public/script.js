@@ -966,3 +966,208 @@ function viewMedia(src, type) {
     }
 }
 
+// =====================================================
+// =========== SECURITY MONITORING SYSTEM =============
+// =====================================================
+// Deterrence + enforcement system. No existing logic touched.
+
+(function initSecurityMonitor() {
+
+    // --- Config ---
+    let warningCount = 0;
+    const MAX_WARNINGS = 2;
+
+    // Determine if current user is the room owner
+    // Owners are not monitored (they have full access)
+    const isOwner = (localStorage.getItem("token") === "owner");
+
+    // DOM refs
+    const overlay = document.getElementById("securityOverlay");
+    const countMsg = document.getElementById("securityCountMsg");
+    const appRoot = document.querySelector(".app");
+
+    // --- Central warning function ---
+    function triggerSecurityWarning(type) {
+        if (isOwner) return; // Never warn the owner
+
+        warningCount++;
+
+        // Emit to server → forwards to room owner
+        socket.emit("security-warning", {
+            room,
+            user: username,
+            type,
+            count: warningCount
+        });
+
+        if (warningCount >= MAX_WARNINGS) {
+            // 2nd violation → kick immediately
+            kickUser();
+            return;
+        }
+
+        // 1st violation → show warning overlay + blur
+        showSecurityOverlay(`Warning ${warningCount}/${MAX_WARNINGS}: You have 1 chance remaining.`);
+
+        // Auto-dismiss overlay after 4s and unblur
+        setTimeout(hideSecurityOverlay, 4000);
+    }
+
+    // --- Show overlay + blur ---
+    function showSecurityOverlay(message) {
+        countMsg.textContent = message;
+        overlay.style.display = "flex";
+        if (appRoot) appRoot.classList.add("chat-blurred");
+    }
+
+    // --- Hide overlay + unblur ---
+    function hideSecurityOverlay() {
+        overlay.style.display = "none";
+        if (appRoot) appRoot.classList.remove("chat-blurred");
+    }
+
+    // --- Auto-kick ---
+    function kickUser() {
+        overlay.style.display = "none";
+
+        socket.emit("kick-user", { room, user: username });
+
+        // Small delay so socket event fires before redirect
+        setTimeout(() => {
+            alert("⛔ You have been removed due to suspicious activity.");
+            window.location.href = "/login.html";
+        }, 300);
+    }
+
+    // ===================================================
+    // A. TAB SWITCH / APP BACKGROUND (3s grace period)
+    //    visibilitychange fires on both desktop and mobile
+    // ===================================================
+    let bgTimer = null;
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            // Start a 3-second grace period before counting as a violation
+            bgTimer = setTimeout(() => {
+                triggerSecurityWarning("APP_BACKGROUND");
+            }, 3000);
+        } else {
+            // User came back before grace period — cancel
+            clearTimeout(bgTimer);
+            bgTimer = null;
+            hideSecurityOverlay();
+        }
+    });
+
+    // ===================================================
+    // B. MOBILE: pagehide (fires when app fully minimised)
+    // ===================================================
+    window.addEventListener("pagehide", () => {
+        clearTimeout(bgTimer);
+        triggerSecurityWarning("APP_BACKGROUND");
+    });
+
+    // ===================================================
+    // C. KEY SHORTCUTS: PrintScreen, Ctrl+Shift+S, Ctrl+P
+    // ===================================================
+    document.addEventListener("keydown", (e) => {
+        const ctrl = e.ctrlKey || e.metaKey;
+        const shift = e.shiftKey;
+
+        if (
+            e.key === "PrintScreen" ||
+            (ctrl && shift && e.key.toLowerCase() === "s") ||
+            (ctrl && e.key.toLowerCase() === "p")
+        ) {
+            e.preventDefault();
+            triggerSecurityWarning("SCREENSHOT_ATTEMPT");
+        }
+    });
+
+    // ===================================================
+    // D. DEVTOOLS DETECTION
+    //    Large gap between outerWidth and innerWidth
+    //    indicates devtools panel is open on the side
+    // ===================================================
+    let devToolsOpen = false;
+    setInterval(() => {
+        if (isOwner) return;
+        const threshold = 160;
+        const widthDiff = window.outerWidth - window.innerWidth;
+        const heightDiff = window.outerHeight - window.innerHeight;
+
+        if (widthDiff > threshold || heightDiff > threshold) {
+            if (!devToolsOpen) {
+                devToolsOpen = true;
+                triggerSecurityWarning("DEVTOOLS_OPEN");
+            }
+        } else {
+            devToolsOpen = false;
+        }
+    }, 2000);
+
+    // ===================================================
+    // OWNER: receive security warning notifications
+    // ===================================================
+    socket.on("security-warning", ({ user, type, count }) => {
+        if (!isOwner) return; // Only owner sees these notices
+
+        const notice = document.createElement("div");
+        notice.className = "security-notice";
+        notice.textContent = `🔔 ${user} triggered "${type}" (warning ${count}/${MAX_WARNINGS})`;
+
+        const msgContainer = document.getElementById("messages");
+        if (msgContainer) {
+            msgContainer.appendChild(notice);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+    });
+
+    // ===================================================
+    // OWNER: receive user-kicked notification
+    // ===================================================
+    socket.on("user-kicked", (kickedUser) => {
+        if (!isOwner) return;
+        const notice = document.createElement("div");
+        notice.className = "security-notice";
+        notice.textContent = `⛔ ${kickedUser} was auto-kicked for suspicious activity.`;
+        const msgContainer = document.getElementById("messages");
+        if (msgContainer) {
+            msgContainer.appendChild(notice);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+    });
+
+    // ===================================================
+    // WATERMARK: diagonal tiled username + timestamp
+    // ===================================================
+    function buildWatermark() {
+        const wm = document.getElementById("chatWatermark");
+        if (!wm) return;
+        wm.innerHTML = ""; // Clear old tiles
+
+        const now = new Date();
+        const stamp = now.toLocaleString("en-IN", { hour12: true });
+        const label = `${username}  ${stamp}`;
+
+        // Tile every 220x120px
+        const cols = Math.ceil(window.innerWidth / 200) + 2;
+        const rows = Math.ceil(window.innerHeight / 110) + 2;
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const tile = document.createElement("span");
+                tile.className = "watermark-tile";
+                tile.textContent = label;
+                tile.style.left = `${c * 210 - 60}px`;
+                tile.style.top = `${r * 115}px`;
+                wm.appendChild(tile);
+            }
+        }
+    }
+
+    // Build watermark immediately, refresh timestamp every 60s
+    buildWatermark();
+    setInterval(buildWatermark, 60000);
+    window.addEventListener("resize", buildWatermark);
+
+})(); // IIFE — keeps all security vars private, zero pollution
