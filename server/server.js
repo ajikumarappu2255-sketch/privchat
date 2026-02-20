@@ -209,6 +209,29 @@ io.on("connection", socket => {
         socket.to(data.room).emit("stopTyping");
     });
 
+    // ================= SECURITY: RECEIVE WARNING =================
+    // Receive security warning from a user and forward to room owner
+    socket.on("security-warning", ({ room, user, type, count }) => {
+        if (!rooms[room]) return;
+        const ownerSocket = rooms[room].ownerSocket;
+        if (ownerSocket) {
+            io.to(ownerSocket).emit("security-warning", { user, type, count });
+        }
+    });
+
+    // ================= SECURITY: KICK USER =================
+    // Find and disconnect the offending socket, notify rest of room
+    socket.on("kick-user", ({ room, user }) => {
+        if (!rooms[room]) return;
+        const targetSocketId = rooms[room].users[user];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit("warningMsg", `You were removed for suspicious activity.`);
+            const targetSocket = io.sockets.sockets.get(targetSocketId);
+            if (targetSocket) targetSocket.disconnect(true);
+        }
+        socket.to(room).emit("user-kicked", user);
+    });
+
     // ================= DISCONNECT =================
     socket.on("disconnect", () => {
         for (const room in rooms) {
