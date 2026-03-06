@@ -1031,8 +1031,322 @@ audio.chat-media {
         /* Adjust for mobile keyboard handling if needed */
     }
 
+
+.mention-dropdown div:hover {
+    background: #e3f2fd;
+}
+
+.mention-dropdown div:last-child {
+    border-bottom: none;
+}
+
+.mention {
+    color: #007bff;
+    font-weight: bold;
+    background: rgba(0, 123, 255, 0.1);
+    padding: 1px 3px;
+    border-radius: 4px;
+}
+
+/* Removed message-level highlight to keep UI clean */
+/* ================= FILE SENDING FEATURE ================= */
+
+/* Attachment Button */
+.attach-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    margin-right: 8px;
+    transition: transform 0.2s;
+}
+
+.attach-btn:hover {
+    transform: scale(1.1);
+}
+
+.attach-btn:active {
+    transform: scale(0.95);
+}
+
+/* File Preview Container (Above Input) */
+.file-preview-container {
+    position: absolute;
+    bottom: 100%;
+    /* Sits above the input bar */
+    left: 0;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #ddd;
+    display: none;
+    /* Hidden by default */
+    padding: 10px;
+    gap: 10px;
+    overflow-x: auto;
+    /* Horizontal scroll */
+    white-space: nowrap;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.file-preview-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    background: #f1f1f1;
+    margin-right: 10px;
+    overflow: hidden;
+    vertical-align: top;
+    border: 1px solid #ddd;
+}
+
+.file-preview-item img,
+.file-preview-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* For non-image files (Docs/Audio) */
+.file-preview-icon {
+    font-size: 30px;
+    margin-top: 15px;
+    color: #555;
+}
+
+.file-preview-name {
+    font-size: 10px;
+    width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    margin-top: 5px;
+}
+
+/* Remove Button (X) */
+.preview-remove-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.preview-remove-btn:hover {
+    background: red;
+}
+
+/* ================= MESSAGE BUBBLE MEDIA STYLES ================= */
+
+/* View Once Button styles */
+.view-once-btn {
+    background: linear-gradient(135deg, #10a37f 0%, #0d8a6a 100%);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 5px 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(16, 163, 127, 0.2);
+}
+
+.view-once-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(16, 163, 127, 0.3);
+}
+
+.view-once-btn:disabled {
+    background: #4a5568;
+    color: #a0aec0;
+    cursor: not-allowed;
+    box-shadow: none;
+    border: 1px solid #718096;
+}
+
+/* Container for media in bubbles (legacy/fallback) */
+.chat-media {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    display: block;
+    cursor: pointer;
+}
+
+/* Images */
+img.chat-media {
+    max-height: 300px;
+    object-fit: contain;
+}
+
+/* Videos */
+video.chat-media {
+    max-height: 300px;
+    background: black;
+}
+
+/* Audio */
+audio.chat-media {
+    width: 200px;
+    height: 40px;
+}
+
+/* File/Doc Attachment */
+.chat-file {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    text-decoration: none;
+    color: inherit;
+    gap: 10px;
+    max-width: 100%;
+}
+
+.chat-file-icon {
+    font-size: 24px;
+    color: #e53935;
+    /* PDF Red-ish */
+}
+
+.chat-file-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-file-name {
+    font-weight: bold;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-file-size {
+    font-size: 11px;
+    color: #666;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .file-preview-container {
+        bottom: 110%;
+        /* Adjust for mobile keyboard handling if needed */
+    }
+
     audio.chat-media {
         width: 100%;
         /* Full width on mobile */
     }
+}
+
+/* ================= PRIVACY BLUR ================= */
+
+/* Blur the chat container itself — visible frosted effect */
+body.privacy-blur .app, 
+body.privacy-blur .chat-container {
+    filter: blur(20px) grayscale(60%) brightness(0.2);
+    /* CRITICAL: instantly hide all text/images to beat screenshot engines */
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Fullscreen overlay sits on top of the blurred chat */
+.privacy-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    /* Make this almost opaque so the screen is genuinely hidden immediately */
+    background: rgba(10, 10, 20, 0.98);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    z-index: 9999999;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    gap: 10px;
+}
+
+body.privacy-blur .privacy-overlay {
+    display: flex;
+}
+
+/* ================= MEDIA MODAL (VIEW ONCE) ================= */
+.media-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 99999999;
+    display: none; /* Flex when active */
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.media-modal .close-modal {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.media-modal .close-modal:hover {
+    color: #ff4d4d;
+}
+
+.media-modal .modal-content {
+    max-width: 90%;
+    max-height: 80%;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.media-modal img, .media-modal video {
+    max-width: 100%;
+    max-height: 80vh;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    border-radius: 8px;
+    pointer-events: auto; /* Allow interaction while viewing */
 }
