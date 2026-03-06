@@ -1,5 +1,8 @@
 // ================= SOCKET CONNECTION =================
-const socket = io("https://privchat-production.up.railway.app", {
+const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? window.location.origin        // localhost → connect to same server
+    : "https://privchat-production.up.railway.app"; // production
+const socket = io(SOCKET_URL, {
     transports: ["websocket", "polling"],
     withCredentials: true
 });
@@ -251,135 +254,6 @@ socket.on("warningMsg", msg => {
         setTimeout(logout, 1500);
     }
 });
-
-// ================= SEND MESSAGE =================
-function sendMessage() {
-    const msg = msgInput.value.trim();
-    if (!msg) return;
-
-    // 🔹 EDIT MODE
-    if (isEditing && editingMessageId) {
-        socket.emit("editMsg", { room, messageId: editingMessageId, newText: msg });
-
-        // Optimistic update
-        const p = myMessages[editingMessageId];
-        if (p) {
-            const textSpan = p.querySelector(".msg-text");
-            // ✅ Parse Mentions for Optimistic Edit
-            const parsedText = msg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-            if (textSpan) {
-                // Check for media content (files)
-                const media = textSpan.querySelector(".media-content");
-                const mediaHtml = media ? media.outerHTML : "";
-
-                textSpan.innerHTML = mediaHtml + parsedText;
-            } else {
-                p.innerHTML = parsedText; // fallback
-            }
-
-            const editedLabel = p.querySelector(".edited-label");
-            if (editedLabel) editedLabel.style.display = "inline";
-        }
-
-        // Reset
-        isEditing = false;
-        editingMessageId = null;
-        sendBtn.innerText = "Send";
-        msgInput.value = "";
-        return;
-    }
-
-    let finalMsg = msg; // Use finalMsg instead of msgInput.value
-
-    // ✅ Add reply prefix if replying
-    if (replyToMessage) {
-        finalMsg = `Reply to: "${replyToMessage}"\n${msg}`;
-        cancelReply();
-    }
-
-    const messageId = Date.now() + "_" + Math.random().toString(36).slice(2);
-
-    // Container
-    const container = document.createElement("div");
-    container.className = "msg-container self";
-
-    // ✅ Create Bubble
-    const p = document.createElement("div");
-    p.className = "msg-bubble self";
-    p.dataset.id = messageId;
-
-    // ✅ Parse
-    const parsedText = finalMsg.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-    // Detect Emoji
-    const isEmoji = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u.test(parsedText.replace(/<[^>]*>/g, ""));
-    if (isEmoji) p.classList.add("emoji-msg");
-
-    // Check for reply prefix in finalMsg to split local display
-    let replyHtml = "";
-    let cleanText = finalMsg;
-
-    if (finalMsg.startsWith("Reply to:")) {
-        const match = finalMsg.match(/^Reply to: "((?:.|\n)*?)"\n((?:.|\n)*)$/);
-        if (match) {
-            replyHtml = `
-            <div class="reply-preview">
-                <strong>Replied to:</strong>
-                <span>${match[1]}</span>
-            </div>
-            `;
-            cleanText = match[2];
-        }
-    }
-
-    // Re-parse the clean text for mentions
-    const parsedCleanText = cleanText.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-
-    p.innerHTML = `
-        ${replyHtml}
-        <span class="msg-text">${parsedCleanText}</span>
-        <span class="ticks" id="tick-${messageId}">✓</span>
-        <span class="edited-label" id="edited-${messageId}" style="display:none;">(edited)</span>
-    `;
-
-    // Menu (Inside bubble)
-    const menuBtn = document.createElement("div");
-    menuBtn.className = "msg-actions-btn";
-    menuBtn.innerHTML = "⋮";
-    menuBtn.onclick = (e) => {
-        e.stopPropagation();
-        toggleMsgMenu(messageId);
-    };
-
-    const menu = document.createElement("div");
-    menu.className = "msg-actions-menu";
-    menu.id = `menu-${messageId}`;
-    menu.innerHTML = `
-      <p onclick="startEditMessage('${messageId}')">Edit</p>
-      <p onclick="deleteMessage('${messageId}')">Delete</p>
-    `;
-
-    p.appendChild(menuBtn);
-    p.appendChild(menu);
-
-    container.appendChild(p);
-
-    messages.appendChild(container);
-    messages.scrollTop = messages.scrollHeight;
-
-    myMessages[messageId] = p;
-
-    socket.emit("privateMsg", {
-        room,
-        message: `${username}: ${finalMsg}`,
-        messageId,
-        sender: socket.id
-    });
-
-    msgInput.value = "";
-    stopTyping();
-}
 
 // ================= ENTER KEY =================
 function pressEnter(e) {
@@ -650,6 +524,12 @@ fileInput.addEventListener("change", (e) => {
 
     // Validate and add files
     files.forEach(file => {
+        // Detect cloud-only placeholders (OneDrive files not yet downloaded)
+        if (file.size === 0) {
+            showFileWarning(`"${file.name}" appears to be empty or a cloud-only file (like OneDrive). Please make sure it's fully downloaded to your computer first.`);
+            return; // Skip this file
+        }
+
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
             showFileWarning(`"${file.name}" is too large. Max file size is ${MAX_FILE_SIZE_MB}MB.`);
             return; // Skip this file, user stays in chat
@@ -824,29 +704,34 @@ async function sendMessage() {
             // Escape filename for safe display
             const safeName = file.name.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;");
 
-            // Build file HTML using the public URL (same structure as before)
-            if (file.type.startsWith("image/")) {
-                fileHtmlContent += `<img src="${publicUrl}" class="chat-media" onclick="viewMedia(this.src, 'image')"><br>`;
-            } else if (file.type.startsWith("video/")) {
-                fileHtmlContent += `<video src="${publicUrl}" controls class="chat-media"></video><br>`;
-            } else if (file.type.startsWith("audio/")) {
-                fileHtmlContent += `<audio src="${publicUrl}" controls class="chat-media"></audio><br>`;
-            } else {
-                // Document / PDF / other
+            // Determine the file type
+            let fileTypeCategory = "document";
+            if (file.type.startsWith("image/")) fileTypeCategory = "image";
+            else if (file.type.startsWith("video/")) fileTypeCategory = "video";
+            else if (file.type.startsWith("audio/")) fileTypeCategory = "audio";
+
+            // Build file HTML using the public URL as a View Once Button
+            if (fileTypeCategory === "document" || fileTypeCategory === "audio") {
+                // Documents and Audio open in a new tab but via a controlled function so we can mark as viewed
                 fileHtmlContent += `
-                <a href="${publicUrl}" download="${safeName}" target="_blank" class="chat-file">
-                    <div class="chat-file-icon">${getFileIcon(file.type)}</div>
-                    <div class="chat-file-info">
-                        <span class="chat-file-name">${safeName}</span>
-                        <span class="chat-file-size">${(file.size / 1024).toFixed(1)} KB</span>
-                    </div>
-                </a><br>`;
+                <button class="view-once-btn" data-url="${publicUrl}" onclick="viewDocument(this)">
+                    <span>${getFileIcon(file.type)}</span> 
+                    <span>View Once: ${safeName}</span>
+                </button><br>`;
+            } else {
+                // Images and Videos open in the fullscreen modal
+                const icon = fileTypeCategory === "image" ? "🖼️" : "🎬";
+                fileHtmlContent += `
+                <button class="view-once-btn" data-url="${publicUrl}" onclick="viewMedia('${publicUrl}', '${fileTypeCategory}', this)">
+                    <span>${icon}</span> 
+                    <span>View Once: ${safeName}</span>
+                </button><br>`;
             }
         }
         // ===== END SUPABASE UPLOAD =====
     } catch (err) {
         console.error("File upload error", err);
-        showFileWarning("Upload failed. Check your connection and try again.");
+        showFileWarning(err.message || "Upload failed. Please try again.");
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
         return;
@@ -939,7 +824,6 @@ async function sendMessage() {
     container.appendChild(p);
     messages.appendChild(container); // Append properly
     messages.scrollTop = messages.scrollHeight;
-
     myMessages[messageId] = p;
 
     socket.emit("privateMsg", {
@@ -958,12 +842,135 @@ async function sendMessage() {
     stopTyping();
 }
 
-// Media Viewer (Optional simple lightbox)
+// ================= MEDIA VIEWER =================
 function viewMedia(src, type) {
     if (type === 'image') {
         const win = window.open("", "_blank");
-        win.document.write(`<img src="${src}" style="max-width:100%">`);
+        win.document.write(`
+            <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#000;height:100vh;" oncontextmenu="return false;">
+                <img src="${src}" style="max-width:100%;max-height:100vh;" draggable="false" oncontextmenu="return false;">
+            </body>
+        `);
     }
 }
 
+// ================= PRIVACY ALERT (server-side relay) =================
+socket.on("privacyAlert", ({ username: alertUser, reason }) => {
+    messages.innerHTML += `<div class="msg-bubble warning">⚠️ <strong>${alertUser}</strong> ${reason}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+});
 
+// =======================================================
+// ================= PRIVACY PROTECTIONS =================
+// =======================================================
+
+let privacyKickTriggered = false; // Prevent double-kick
+
+function triggerPrivacyAlert(reason) {
+    if (privacyKickTriggered) return;
+    privacyKickTriggered = true;
+
+    // Ensure overlay exists
+    let overlay = document.querySelector('.privacy-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'privacy-overlay';
+        overlay.innerHTML = '🛡️ Privacy Protection Active<br><span style="font-size:14px;font-weight:normal;margin-top:10px;display:block;">Removing you from the room...</span>';
+        document.body.appendChild(overlay);
+    }
+
+    // Blur the chat
+    document.body.classList.add('privacy-blur');
+
+    // Notify the room via server
+    socket.emit("privacyAlert", { room, username, reason });
+    socket.emit("privacyKick", { room, username, reason }); // Send kick warning to room
+
+    // Kick the user after 1 second (1000ms)
+    setTimeout(() => {
+        socket.disconnect();
+        localStorage.clear();
+        window.location.href = "login.html";
+    }, 1000);
+}
+
+// AGGRESSIVELY block PrintScreen at the OS/Browser handler level
+window.addEventListener("keydown", (e) => {
+    if (e.key === "PrintScreen") {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Spam the clipboard with empty data to instantly corrupt the screenshot buffer
+        for (let i = 0; i < 5; i++) {
+            navigator.clipboard.writeText("Screenshots are blocked.").catch(() => {});
+        }
+    }
+}, true);
+
+// PC Screenshot Detection (still triggers the kick)
+window.addEventListener("keyup", (e) => {
+    if (e.key === "PrintScreen") {
+        triggerPrivacyAlert("attempted a screenshot (PrintScreen key)!");
+        navigator.clipboard.writeText("Screenshots are disabled in this chat.").catch(() => {});
+    }
+});
+
+// Tab / App Switch Detection (Mobile & PC)
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+        triggerPrivacyAlert("switched tabs or minimized the app (possible screen capture)!");
+    }
+});
+
+
+
+// ================= VIEW ONCE MEDIA logic =================
+let currentViewOnceButton = null;
+
+window.viewMedia = function(url, type, btnElement) {
+    if (btnElement.disabled) return;
+    currentViewOnceButton = btnElement;
+
+    const modal = document.getElementById('mediaModal');
+    const content = document.getElementById('mediaModalContent');
+    
+    if (type === 'image') {
+        content.innerHTML = '<img src="' + url + '" draggable="false" oncontextmenu="return false;">';
+    } else if (type === 'video') {
+        content.innerHTML = '<video src="' + url + '" controls controlsList="nodownload" autoplay oncontextmenu="return false;"></video>';
+    }
+
+    modal.style.display = 'flex';
+};
+
+window.viewDocument = function(btnElement) {
+    if (btnElement.disabled) return;
+    
+    const url = btnElement.getAttribute('data-url');
+    // Open in new tab
+    window.open(url, '_blank');
+    
+    // Instantly mark as destroyed locally
+    btnElement.innerHTML = '<span>🚫</span> <span>Viewed</span>';
+    btnElement.disabled = true;
+    btnElement.removeAttribute('data-url');
+    btnElement.removeAttribute('onclick');
+};
+
+window.closeMediaModal = function() {
+    const modal = document.getElementById('mediaModal');
+    const content = document.getElementById('mediaModalContent');
+    
+    // Stop and clear video/image
+    content.innerHTML = '';
+    modal.style.display = 'none';
+
+    // Destroy the button so the file cannot be opened again
+    if (currentViewOnceButton) {
+        currentViewOnceButton.innerHTML = '<span>🚫</span> <span>Viewed</span>';
+        currentViewOnceButton.disabled = true;
+        currentViewOnceButton.removeAttribute('data-url');
+        currentViewOnceButton.removeAttribute('onclick');
+        currentViewOnceButton = null;
+    }
+};
