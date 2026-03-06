@@ -209,6 +209,20 @@ io.on("connection", socket => {
         socket.to(data.room).emit("stopTyping");
     });
 
+    // ================= PRIVACY ALERT (SCREENSHOT/TAB) =================
+    socket.on("privacyAlert", ({ room, username, reason }) => {
+        if (!rooms[room]) return;
+        // Broadcast a system warning message to all users in the room
+        io.to(room).emit("warningMsg", `🚨 <b>PRIVACY ALERT:</b> ${username} ${reason}`);
+    });
+
+    // ================= PRIVACY KICK =================
+    socket.on("privacyKick", ({ room, username, reason }) => {
+        if (!rooms[room]) return;
+        // Broadcast to the whole room that this user was auto-kicked
+        io.to(room).emit("warningMsg", `🚫 <b>${username}</b> was automatically removed from the room due to a privacy violation: <em>${reason}</em>`);
+    });
+
     // ================= DISCONNECT =================
     socket.on("disconnect", () => {
         for (const room in rooms) {
