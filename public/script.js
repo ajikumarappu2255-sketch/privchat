@@ -946,26 +946,16 @@ window.addEventListener('keyup', (e) => {
 });
 
 // ── Tab switch / app minimize (all platforms) ─────────────
-// Mobile devices (iOS/Android) fire visibilitychange:hidden for file picker,
-// camera, keyboard, system dialogs — causing constant false kicks.
-// Privacy kick on tab/minimize is DESKTOP ONLY.
-const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-
+// Tab switch / minimize: blur screen but NEVER kick.
+// Kicking on visibilitychange is removed — it causes false logouts on mobile
+// (file picker, camera, keyboard, system dialogs all fire hidden on iOS/Android).
 document.addEventListener('visibilitychange', () => {
-    if (isMobile) return; // No kick on mobile — too many false positives
-
     if (document.visibilityState === 'hidden') {
-        if (filePickerOpen || fileUploadInProgress) return;
-
-        blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
-
-        privacyHideTimer = setTimeout(() => {
-            if (document.visibilityState === 'hidden' && !filePickerOpen && !fileUploadInProgress) {
-                triggerPrivacyAlert('switched tabs or minimized the app!');
-            }
-        }, 2000);
+        // Just blur the screen for privacy — do NOT kick or start any timer
+        if (!privacyKickTriggered) {
+            blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
+        }
     } else if (document.visibilityState === 'visible') {
-        clearTimeout(privacyHideTimer);
         if (!privacyKickTriggered) {
             unblurScreen();
         }
