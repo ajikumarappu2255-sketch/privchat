@@ -221,7 +221,7 @@ socket.on("warningMsg", msg => {
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
 
-    const shouldLogout = msg.includes("rejected") || msg.includes("Room closed") || msg.includes("another device");
+    const shouldLogout = msg.includes("rejected") || msg.includes("Room closed");
     if (shouldLogout) {
         setTimeout(logout, 1500);
     }
@@ -235,6 +235,7 @@ function pressEnter(e) {
 // ================= LOGOUT =================
 function logout() {
     localStorage.clear();
+    socket.disconnect();
     window.location.href = "login.html";
 }
 
