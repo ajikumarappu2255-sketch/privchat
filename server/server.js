@@ -66,21 +66,26 @@ io.on("connection", socket => {
         }
 
         if (roomData.users[username]) {
-            // New logic: Allow session takeover (fixes auto-disconnect on reconnect)
             const oldSocketId = roomData.users[username];
 
-            // Notify old socket
-            io.to(oldSocketId).emit("warningMsg", "You have connected from another device/tab. Disconnecting this session.");
+            // Silently disconnect old socket (no warning - avoids confusing the rejoining user)
+            if (oldSocketId !== socket.id) {
+                const oldSocket = io.sockets.sockets.get(oldSocketId);
+                if (oldSocket) {
+                    oldSocket.leave(room);
+                    oldSocket.disconnect(true);
+                }
+            }
 
-            // Disconnect old socket (forcefully)
-            io.sockets.sockets.get(oldSocketId)?.disconnect(true);
+            // If old socket was the owner, transfer ownership to new socket
+            if (roomData.ownerSocket === oldSocketId) {
+                roomData.ownerSocket = socket.id;
+            }
 
-            // Update new socket
+            // Register new socket
             roomData.users[username] = socket.id;
             socket.join(room);
-
-            // Notify new socket
-            socket.emit("privateMsg", "Restored session for " + username);
+            socket.emit('privateMsg', 'Welcome back, ' + username + '!');
             broadcastRoomUsers(room);
             return;
         }
