@@ -486,7 +486,11 @@ window.addEventListener("focus", () => {
 });
 
 fileInput.addEventListener("change", (e) => {
-    filePickerOpen = false;
+    // Keep filePickerOpen true for 1.5s after change fires.
+    // On mobile (iOS/Android), visibilitychange: hidden fires AFTER the
+    // file picker closes — even when we reject the file for size. Without
+    // this delay the privacy kick would trigger on large-file rejections.
+    setTimeout(() => { filePickerOpen = false; }, 1500);
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -710,6 +714,8 @@ async function sendMessage() {
         // Strip any text that could accidentally trigger logout logic
         showFileWarning(errMsg.replace(/rejected/gi, "not accepted").replace(/Room closed/gi, "unavailable"));
         fileUploadInProgress = false;
+        selectedFiles = [];
+        renderFilePreviews();
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
         return;
@@ -936,7 +942,7 @@ document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden' && !filePickerOpen && !fileUploadInProgress) {
                 triggerPrivacyAlert('switched tabs or minimized the app!');
             }
-        }, 800);
+        }, 1200);
     } else if (document.visibilityState === 'visible') {
         clearTimeout(privacyHideTimer);
         if (!privacyKickTriggered) {
