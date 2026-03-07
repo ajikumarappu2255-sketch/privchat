@@ -820,7 +820,6 @@ window.closeMediaModal = function () {
 // =======================================================
 let privacyKickTriggered = false;
 let privacyHideTimer = null;
-let screenshotBlurTimer = null;
 let currentViewOnceButton = null;
 
 // Create overlay element once and reuse
@@ -880,47 +879,6 @@ window.addEventListener('keyup', (e) => {
         triggerPrivacyAlert('attempted a screenshot (PrintScreen key)!');
         navigator.clipboard.writeText('Screenshots are disabled in this chat.').catch(() => {});
     }
-});
-
-// ── Mobile: Screen Capture API (Chrome Android 94+) ───────
-// This fires when the user starts a screen capture / screenshot on supported devices
-if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-    navigator.mediaDevices.addEventListener('devicechange', () => {
-        // Some Android devices briefly add a virtual screen capture device
-        triggerPrivacyAlert('a screen capture device was detected!');
-    });
-}
-
-// ── Mobile: window blur fires on iOS when screenshot button pressed ───
-// Also fires for Android volume+power combo on some browsers
-let lastBlurTime = 0;
-window.addEventListener('blur', () => {
-    if (privacyKickTriggered) return;
-    lastBlurTime = Date.now();
-
-    // Short blur = screenshot gesture (iOS ~100-300ms), long blur = real switch
-    // We blur the screen immediately, then decide after a short window
-    blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
-
-    screenshotBlurTimer = setTimeout(() => {
-        // Still blurred after 1s = real app switch, trigger kick via visibilitychange
-        // (visibilitychange will handle it). If came back already, unblur happened.
-    }, 1000);
-});
-
-window.addEventListener('focus', () => {
-    if (privacyKickTriggered) return;
-    clearTimeout(screenshotBlurTimer);
-    const blurDuration = Date.now() - lastBlurTime;
-
-    if (lastBlurTime > 0 && blurDuration < 600) {
-        // Very short blur = screenshot gesture on mobile → kick
-        triggerPrivacyAlert('attempted a screenshot (gesture detected)!');
-    } else {
-        // Longer = just came back from app switcher or file picker, unblur
-        unblurScreen();
-    }
-    lastBlurTime = 0;
 });
 
 // ── Tab switch / app minimize (all platforms) ─────────────
