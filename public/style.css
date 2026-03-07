@@ -889,11 +889,19 @@ audio.chat-media { width: 200px; height: 40px; }
 }
 
 /* ================= PRIVACY BLUR ================= */
+/* Temporary blur — screen hidden, removed if user comes back quickly */
+body.privacy-screen .app,
+body.privacy-screen .chat-container {
+    filter: blur(25px) brightness(0.1);
+    pointer-events: none;
+    user-select: none;
+    transition: filter 0.15s ease;
+}
+
+/* Permanent kick blur */
 body.privacy-blur .app,
 body.privacy-blur .chat-container {
-    filter: blur(20px) grayscale(60%) brightness(0.2);
-    opacity: 0 !important;
-    visibility: hidden !important;
+    filter: blur(25px) brightness(0.1);
     pointer-events: none;
     user-select: none;
 }
@@ -904,9 +912,9 @@ body.privacy-blur .chat-container {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(10, 10, 20, 0.98);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    background: rgba(10, 10, 20, 0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     z-index: 9999999;
     display: none;
     flex-direction: column;
@@ -920,6 +928,8 @@ body.privacy-blur .chat-container {
     gap: 10px;
 }
 
+/* Show overlay for both temporary and permanent */
+body.privacy-screen .privacy-overlay,
 body.privacy-blur .privacy-overlay { display: flex; }
 
 /* ================= MEDIA MODAL (VIEW ONCE) ================= */
@@ -999,10 +1009,9 @@ body.privacy-blur .privacy-overlay { display: flex; }
 /* ================= VIEW ONCE SIMPLE CHECKBOX ================= */
 .view-once-simple-container {
     display: inline-flex;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: center;
     gap: 5px;
     cursor: pointer;
     align-self: center;
@@ -1011,9 +1020,6 @@ body.privacy-blur .privacy-overlay { display: flex; }
     border: 2px dashed #999;
     margin: auto 6px;
     flex-shrink: 0;
-    min-width: fit-content;
-    width: auto;
-    height: 80px;
     transition: all 0.2s ease;
     user-select: none;
 }
@@ -1039,8 +1045,6 @@ body.privacy-blur .privacy-overlay { display: flex; }
     line-height: 1;
     cursor: pointer;
     white-space: nowrap;
-    flex-shrink: 0;
-    order: -1;
 }
 
 .view-once-simple-container:has(input:checked) .view-once-simple-text { color: #10a37f; }
