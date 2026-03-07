@@ -999,9 +999,10 @@ body.privacy-blur .privacy-overlay { display: flex; }
 /* ================= VIEW ONCE SIMPLE CHECKBOX ================= */
 .view-once-simple-container {
     display: inline-flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center;
+    justify-content: center;
     gap: 5px;
     cursor: pointer;
     align-self: center;
@@ -1010,6 +1011,9 @@ body.privacy-blur .privacy-overlay { display: flex; }
     border: 2px dashed #999;
     margin: auto 6px;
     flex-shrink: 0;
+    min-width: fit-content;
+    width: auto;
+    height: 80px;
     transition: all 0.2s ease;
     user-select: none;
 }
@@ -1035,6 +1039,8 @@ body.privacy-blur .privacy-overlay { display: flex; }
     line-height: 1;
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
+    order: -1;
 }
 
 .view-once-simple-container:has(input:checked) .view-once-simple-text { color: #10a37f; }
