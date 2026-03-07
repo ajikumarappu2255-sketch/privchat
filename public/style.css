@@ -1350,3 +1350,105 @@ body.privacy-blur .privacy-overlay {
     border-radius: 8px;
     pointer-events: auto; /* Allow interaction while viewing */
 }
+
+
+/* ================= SYSTEM WARNING MESSAGES ================= */
+.message.warning {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+    text-align: center;
+    margin: 10px auto;
+    font-size: 13px;
+    font-weight: 500;
+    width: 80%;
+    align-self: center;
+    box-shadow: 0 2px 5px rgba(229, 57, 53, 0.2);
+    display: flex;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+
+/* ================= VIEW ONCE TOGGLE ================= */
+.view-once-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;  /* Don't shrink in flex */
+    border-radius: 50%;
+    border: 2px dashed #999;
+    cursor: pointer;
+    margin: auto 8px;
+    align-self: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.view-once-toggle input {
+    display: none;
+}
+
+.view-once-icon {
+    font-size: 16px;
+    font-weight: bold;
+    color: #999;
+}
+
+/* Checked State */
+.view-once-toggle:has(input:checked) {
+    border: 2px solid #10a37f;
+    background: #e6f4f1;
+}
+
+.view-once-toggle:has(input:checked) .view-once-icon {
+    color: #10a37f;
+}
+
+/* ================= VIEW ONCE SIMPLE CHECKBOX ================= */
+.view-once-simple-container {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    align-self: center;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 2px dashed #999;
+    margin: auto 6px;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.view-once-simple-container:has(input:checked) {
+    border: 2px solid #10a37f;
+    background: #e6f4f1;
+}
+
+.view-once-simple-checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #10a37f;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.view-once-simple-text {
+    font-size: 15px;
+    font-weight: bold;
+    color: #666;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.view-once-simple-container:has(input:checked) .view-once-simple-text {
+    color: #10a37f;
+}
