@@ -2,8 +2,8 @@ const express = require("express");
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
-    maxHttpBufferSize: 5e7, // 50MB
-    pingTimeout: 60000, // 60 seconds (prevents disconnect during upload)
+    maxHttpBufferSize: 5e7,
+    pingTimeout: 60000,
     cors: {
         origin: ["https://privchat-pi.vercel.app"],
         methods: ["GET", "POST"]
@@ -13,13 +13,11 @@ const io = require("socket.io")(http, {
 app.use(express.static("public"));
 
 const rooms = {};
-// roomName => { token, ownerSocket, users: { username: socketId }, pending: { socketId: username } }
-
-// 🔹 ADDED: Message status store
 const messageStatus = {};
-// messageId => { room, senderSocket, senderUsername, deliveredTo: [], seenBy: [] }
 
-// Helper: get username by socket id
+// Track sockets that explicitly logged out — ignore their disconnect event
+const loggedOutSockets = new Set();
+
 function getUsernameBySocket(room, socketId) {
     const roomData = rooms[room];
     if (!roomData) return null;
@@ -29,22 +27,57 @@ function getUsernameBySocket(room, socketId) {
     return null;
 }
 
-// 🔹 ADDED: Broadcast active users to room
 function broadcastRoomUsers(room) {
     if (!rooms[room]) return;
     const userList = Object.keys(rooms[room].users);
     io.to(room).emit("roomUsers", { users: userList });
 }
 
+// Central cleanup: remove socket from all rooms
+function removeSocketFromRooms(socketId) {
+    for (const room in rooms) {
+        const r = rooms[room];
+
+        // Remove from pending
+        for (const sid in r.pending) {
+            if (sid === socketId) delete r.pending[sid];
+        }
+
+        // Remove from users
+        for (const user in r.users) {
+            if (r.users[user] === socketId) {
+                delete r.users[user];
+                broadcastRoomUsers(room);
+                break;
+            }
+        }
+
+        // If owner left, close the room
+        if (r.ownerSocket === socketId) {
+            io.to(room).emit("warningMsg", "Room owner left. Room closed.");
+            delete rooms[room];
+        }
+    }
+}
+
 io.on("connection", socket => {
 
-    // ================= JOIN ROOM =================
+    // ===== EXPLICIT LOGOUT =====
+    // Client emits this before clearing localStorage and redirecting
+    socket.on("logout", () => {
+        loggedOutSockets.add(socket.id);
+        removeSocketFromRooms(socket.id);
+        socket.disconnect(true);
+    });
+
+    // ===== JOIN ROOM =====
     socket.on("joinRoom", ({ username, room, token }) => {
         if (!username || !room || !token) {
             socket.emit("warningMsg", "All fields are required!");
             return;
         }
 
+        // Create room if it doesn't exist
         if (!rooms[room]) {
             rooms[room] = {
                 token,
@@ -65,41 +98,39 @@ io.on("connection", socket => {
             return;
         }
 
+        // User already in room (session takeover / reconnect)
         if (roomData.users[username]) {
             const oldSocketId = roomData.users[username];
 
-            // Silently disconnect old socket (no warning - avoids confusing the rejoining user)
             if (oldSocketId !== socket.id) {
-                const oldSocket = io.sockets.sockets.get(oldSocketId);
-                if (oldSocket) {
-                    oldSocket.leave(room);
-                    oldSocket.disconnect(true);
+                // Silently kill old socket (same person, no warning needed)
+                const oldSock = io.sockets.sockets.get(oldSocketId);
+                if (oldSock) {
+                    loggedOutSockets.add(oldSocketId); // prevent disconnect handler from firing
+                    oldSock.disconnect(true);
                 }
+
+                // Transfer ownership if old socket was owner
+                if (roomData.ownerSocket === oldSocketId) {
+                    roomData.ownerSocket = socket.id;
+                }
+
+                roomData.users[username] = socket.id;
             }
 
-            // If old socket was the owner, transfer ownership to new socket
-            if (roomData.ownerSocket === oldSocketId) {
-                roomData.ownerSocket = socket.id;
-            }
-
-            // Register new socket
-            roomData.users[username] = socket.id;
             socket.join(room);
-            socket.emit('privateMsg', 'Welcome back, ' + username + '!');
+            socket.emit("privateMsg", "Welcome back, " + username + "!");
             broadcastRoomUsers(room);
             return;
         }
 
+        // New user — needs owner approval
         roomData.pending[socket.id] = username;
-        io.to(roomData.ownerSocket).emit("joinRequest", {
-            username,
-            socketId: socket.id
-        });
-
+        io.to(roomData.ownerSocket).emit("joinRequest", { username, socketId: socket.id });
         socket.emit("privateMsg", "Waiting for owner approval...");
     });
 
-    // ================= APPROVE / REJECT USER =================
+    // ===== APPROVE / REJECT =====
     socket.on("approveUser", ({ room, socketId }) => {
         const roomData = rooms[room];
         if (!roomData || socket.id !== roomData.ownerSocket) return;
@@ -121,16 +152,14 @@ io.on("connection", socket => {
 
         delete roomData.pending[socketId];
         io.to(socketId).emit("warningMsg", "Owner rejected your request.");
-        io.sockets.sockets.get(socketId)?.disconnect();
+        io.sockets.sockets.get(socketId)?.disconnect(true);
     });
 
-    // ================= SEND MESSAGE =================
+    // ===== MESSAGING =====
     socket.on("privateMsg", ({ room, message, messageId }) => {
         if (!rooms[room]) return;
 
         const senderUsername = getUsernameBySocket(room, socket.id);
-
-        // store message status
         messageStatus[messageId] = {
             room,
             senderSocket: socket.id,
@@ -139,34 +168,24 @@ io.on("connection", socket => {
             seenBy: []
         };
 
-        // send to other users only
         socket.to(room).emit("privateMsg", { message, messageId, sender: socket.id });
 
-        // mark delivered to others
         for (const user in rooms[room].users) {
             if (rooms[room].users[user] !== socket.id) {
                 messageStatus[messageId].deliveredTo.push(user);
             }
         }
 
-        // notify sender
-        socket.emit("messageDelivered", {
-            messageId,
-            deliveredTo: messageStatus[messageId].deliveredTo
-        });
+        socket.emit("messageDelivered", { messageId, deliveredTo: messageStatus[messageId].deliveredTo });
     });
 
-    // ================= MESSAGE READ =================
     socket.on("messageRead", ({ room, messageId, username }) => {
         const msg = messageStatus[messageId];
         if (!msg || msg.room !== room) return;
 
-        if (!msg.seenBy.includes(username)) {
-            msg.seenBy.push(username);
-        }
+        if (!msg.seenBy.includes(username)) msg.seenBy.push(username);
 
         const totalReceivers = Object.keys(rooms[room].users).length - 1;
-
         io.to(msg.senderSocket).emit("messageSeen", {
             messageId,
             seenBy: msg.seenBy,
@@ -174,36 +193,22 @@ io.on("connection", socket => {
         });
     });
 
-    // ================= DELETE MESSAGE =================
     socket.on("deleteMsg", ({ room, messageId }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
-        if (!msg) return;
-
-        // Only sender can delete
-        if (msg.senderSocket !== socket.id) return;
-
-        // remove from server store
+        if (!msg || msg.senderSocket !== socket.id) return;
         delete messageStatus[messageId];
-
-        // notify all users including sender
         io.to(room).emit("deleteMsg", { messageId });
     });
 
-    // ================= EDIT MESSAGE =================
     socket.on("editMsg", ({ room, messageId, newText }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
-        if (!msg) return;
-
-        // Only sender can edit
-        if (msg.senderSocket !== socket.id) return;
-
-        // Broadcast change
+        if (!msg || msg.senderSocket !== socket.id) return;
         io.to(room).emit("editMsg", { messageId, newText });
     });
 
-    // ================= TYPING =================
+    // ===== TYPING =====
     socket.on("typing", (data) => {
         if (!rooms[data.room]) return;
         socket.to(data.room).emit("typing", data);
@@ -214,42 +219,29 @@ io.on("connection", socket => {
         socket.to(data.room).emit("stopTyping");
     });
 
-    // ================= PRIVACY ALERT (SCREENSHOT/TAB) =================
+    // ===== PRIVACY =====
     socket.on("privacyAlert", ({ room, username, reason }) => {
         if (!rooms[room]) return;
-        // Broadcast a system warning message to all users in the room
         io.to(room).emit("warningMsg", `🚨 <b>PRIVACY ALERT:</b> ${username} ${reason}`);
     });
 
-    // ================= PRIVACY KICK =================
     socket.on("privacyKick", ({ room, username, reason }) => {
         if (!rooms[room]) return;
-        // Broadcast to the whole room that this user was auto-kicked
         io.to(room).emit("warningMsg", `🚫 <b>${username}</b> was automatically removed from the room due to a privacy violation: <em>${reason}</em>`);
     });
 
-    // ================= DISCONNECT =================
+    // ===== DISCONNECT =====
     socket.on("disconnect", () => {
-        for (const room in rooms) {
-            const r = rooms[room];
-
-            for (const user in r.users) {
-                if (r.users[user] === socket.id) {
-                    delete r.users[user];
-                    broadcastRoomUsers(room);
-                }
-            }
-
-            if (r.ownerSocket === socket.id) {
-                io.to(room).emit("warningMsg", "Room owner left. Room closed.");
-                delete rooms[room];
-            }
+        // Clean logout already handled above — skip
+        if (loggedOutSockets.has(socket.id)) {
+            loggedOutSockets.delete(socket.id);
+            return;
         }
+        // Unclean disconnect (network drop, browser close, tab killed)
+        removeSocketFromRooms(socket.id);
     });
 
 });
 
 const PORT = process.env.PORT || 8080;
-http.listen(PORT, () =>
-    console.log(`Server running on port ${PORT}`)
-);
+http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
