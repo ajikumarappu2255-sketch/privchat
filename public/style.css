@@ -440,11 +440,9 @@ body {
     position: relative;
 
     /* WhatsApp-style subtle pattern */
-    background-color: #e8ede4;
-    background-image:
-        /* Leaf / organic shapes */
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='%23c5cebe' stroke-width='1' opacity='0.55'%3E%3Cellipse cx='20' cy='20' rx='10' ry='16' transform='rotate(-30 20 20)'/%3E%3Cellipse cx='60' cy='60' rx='10' ry='16' transform='rotate(-30 60 60)'/%3E%3Cellipse cx='60' cy='20' rx='10' ry='16' transform='rotate(30 60 20)'/%3E%3Cellipse cx='20' cy='60' rx='10' ry='16' transform='rotate(30 20 60)'/%3E%3Cellipse cx='40' cy='40' rx='10' ry='16' transform='rotate(-30 40 40)'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: 80px 80px;
+    background-color: #eaf0e6;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cg fill='none' stroke='%23b8c4b0' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round' opacity='0.5'%3E%3C!-- lock body --%3E%3Crect x='16' y='28' width='28' height='22' rx='4'/%3E%3C!-- shackle arc --%3E%3Cpath d='M22 28 v-8 a8 8 0 0 1 16 0 v8'/%3E%3C!-- keyhole circle --%3E%3Ccircle cx='30' cy='38' r='3'/%3E%3C!-- keyhole slot --%3E%3Cline x1='30' y1='41' x2='30' y2='45'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 60px 60px;
 }
 
 .chat-body::-webkit-scrollbar { width: 4px; }
