@@ -446,6 +446,8 @@ let selectedFiles = [];
 const fileInput = document.getElementById("fileInput");
 const filePreviewContainer = document.getElementById("filePreviewContainer");
 const MAX_FILE_SIZE_MB = 50;
+let filePickerOpen = false;     // true while file picker dialog is open
+let fileUploadInProgress = false; // true while uploading to Supabase
 
 function showFileWarning(msg) {
     const warn = document.createElement("div");
@@ -470,7 +472,20 @@ function showFileWarning(msg) {
     setTimeout(() => warn.remove(), 3500);
 }
 
+// Track file picker open/close
+fileInput.addEventListener("click", () => {
+    filePickerOpen = true;
+    // Safety: reset after 30s if user cancels without picking
+    setTimeout(() => { filePickerOpen = false; }, 30000);
+});
+
+window.addEventListener("focus", () => {
+    // Page regained focus = file picker closed (picked or cancelled)
+    filePickerOpen = false;
+});
+
 fileInput.addEventListener("change", (e) => {
+    filePickerOpen = false;
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -616,6 +631,7 @@ async function sendMessage() {
     if (selectedFiles.length > 0) {
         sendBtn.disabled = true;
         sendBtn.innerText = "Sending...";
+        fileUploadInProgress = true;
     }
 
     let fileHtmlContent = "";
@@ -670,6 +686,7 @@ async function sendMessage() {
     } catch (err) {
         console.error("File upload error", err);
         showFileWarning(err.message || "Upload failed. Please try again.");
+        fileUploadInProgress = false;
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
         return;
@@ -755,6 +772,7 @@ async function sendMessage() {
     });
 
     msgInput.value = "";
+    fileUploadInProgress = false;
     selectedFiles = [];
     renderFilePreviews();
     const voChk = document.getElementById('viewOnceCheckbox');
@@ -884,12 +902,15 @@ window.addEventListener('keyup', (e) => {
 // ── Tab switch / app minimize (all platforms) ─────────────
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+        // Never kick while file picker is open or file is uploading
+        if (filePickerOpen || fileUploadInProgress) return;
+
         // Blur immediately so screen is hidden in the app switcher thumbnail
         blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
 
-        // Grace period: file picker / system UI comes back quickly
+        // Grace period: system UI / brief interruptions come back quickly
         privacyHideTimer = setTimeout(() => {
-            if (document.visibilityState === 'hidden') {
+            if (document.visibilityState === 'hidden' && !filePickerOpen && !fileUploadInProgress) {
                 triggerPrivacyAlert('switched tabs or minimized the app!');
             }
         }, 800);
