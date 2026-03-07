@@ -221,7 +221,7 @@ socket.on("warningMsg", msg => {
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
 
-    const shouldLogout = msg.includes("rejected") || msg.includes("Room closed");
+    const shouldLogout = msg.includes("Owner rejected") || msg.includes("Room closed");
     if (shouldLogout) {
         setTimeout(logout, 1500);
     }
@@ -639,6 +639,25 @@ async function sendMessage() {
 
     try {
         for (const file of selectedFiles) {
+            // Double-check size before uploading (safety net)
+            if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+                showFileWarning(`"${file.name}" is too large. Max file size is ${MAX_FILE_SIZE_MB}MB.`);
+                fileUploadInProgress = false;
+                sendBtn.disabled = false;
+                sendBtn.innerText = "Send";
+                selectedFiles = [];
+                renderFilePreviews();
+                return;
+            }
+            if (file.size === 0) {
+                showFileWarning(`"${file.name}" appears to be empty. Please try again.`);
+                fileUploadInProgress = false;
+                sendBtn.disabled = false;
+                sendBtn.innerText = "Send";
+                selectedFiles = [];
+                renderFilePreviews();
+                return;
+            }
             const publicUrl = await uploadToSupabase(file);
             const safeName = file.name.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/@/g, "&#64;");
 
@@ -686,7 +705,10 @@ async function sendMessage() {
         }
     } catch (err) {
         console.error("File upload error", err);
-        showFileWarning(err.message || "Upload failed. Please try again.");
+        // Show warning only - never logout the user on upload failure
+        const errMsg = (err.message || "Upload failed. Please try again.");
+        // Strip any text that could accidentally trigger logout logic
+        showFileWarning(errMsg.replace(/rejected/gi, "not accepted").replace(/Room closed/gi, "unavailable"));
         fileUploadInProgress = false;
         sendBtn.disabled = false;
         sendBtn.innerText = "Send";
