@@ -822,31 +822,53 @@ let privacyKickTriggered = false;
 let privacyHideTimer = null;
 let currentViewOnceButton = null;
 
-function triggerPrivacyAlert(reason) {
-    if (privacyKickTriggered) return;
-    privacyKickTriggered = true;
-
+// Create overlay element once and reuse
+function getOrCreateOverlay(message) {
     let overlay = document.querySelector('.privacy-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'privacy-overlay';
-        overlay.innerHTML = '🛡️ Privacy Protection Active<br><span style="font-size:14px;font-weight:normal;margin-top:10px;display:block;">Removing you from the room...</span>';
         document.body.appendChild(overlay);
     }
+    overlay.innerHTML = message;
+    return overlay;
+}
 
+// Immediately blur the screen (temporary - can be reversed)
+function blurScreen(message) {
+    getOrCreateOverlay(message);
+    document.body.classList.add('privacy-screen');
+}
+
+// Remove temporary blur (e.g. user came back from file picker)
+function unblurScreen() {
+    document.body.classList.remove('privacy-screen');
+}
+
+// Permanent kick - blur + redirect
+function triggerPrivacyAlert(reason) {
+    if (privacyKickTriggered) return;
+    privacyKickTriggered = true;
+
+    getOrCreateOverlay('🛡️ Privacy Protection Active<br><span style="font-size:14px;font-weight:normal;margin-top:10px;display:block;">Removing you from the room...</span>');
+
+    // Remove temp class and add permanent blur
+    document.body.classList.remove('privacy-screen');
     document.body.classList.add('privacy-blur');
 
     setTimeout(() => {
         socket.disconnect();
         localStorage.clear();
         window.location.href = "login.html";
-    }, 1000);
+    }, 1500);
 }
 
 window.addEventListener("keydown", (e) => {
     if (e.key === "PrintScreen") {
         e.preventDefault();
         e.stopPropagation();
+        // Blur immediately on keydown
+        blurScreen('🛡️ Screenshots are blocked in this chat');
         for (let i = 0; i < 5; i++) {
             navigator.clipboard.writeText("Screenshots are blocked.").catch(() => { });
         }
@@ -862,16 +884,20 @@ window.addEventListener("keyup", (e) => {
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-        // Use a grace period - if the page becomes visible again quickly
-        // it was just a file picker or system UI, not a real tab switch
+        // Blur immediately so screen is hidden in the app switcher / screenshot
+        blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
+
+        // Grace period: if page comes back quickly it was just file picker / system UI
         privacyHideTimer = setTimeout(() => {
-            // Double-check we are still hidden before kicking
             if (document.visibilityState === "hidden") {
-                triggerPrivacyAlert("switched tabs or minimized the app (possible screen capture)!");
+                triggerPrivacyAlert("switched tabs or minimized the app!");
             }
         }, 800);
     } else if (document.visibilityState === "visible") {
-        // Page came back - cancel any pending kick (was just file picker / system UI)
+        // Cancel pending kick and remove blur - was just file picker or brief system UI
         clearTimeout(privacyHideTimer);
+        if (!privacyKickTriggered) {
+            unblurScreen();
+        }
     }
 });
