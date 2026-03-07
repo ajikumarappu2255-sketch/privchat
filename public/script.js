@@ -820,6 +820,7 @@ window.closeMediaModal = function () {
 // =======================================================
 let privacyKickTriggered = false;
 let privacyHideTimer = null;
+let screenshotBlurTimer = null;
 let currentViewOnceButton = null;
 
 // Create overlay element once and reuse
@@ -840,7 +841,7 @@ function blurScreen(message) {
     document.body.classList.add('privacy-screen');
 }
 
-// Remove temporary blur (e.g. user came back from file picker)
+// Remove temporary blur
 function unblurScreen() {
     document.body.classList.remove('privacy-screen');
 }
@@ -852,49 +853,89 @@ function triggerPrivacyAlert(reason) {
 
     getOrCreateOverlay('🛡️ Privacy Protection Active<br><span style="font-size:14px;font-weight:normal;margin-top:10px;display:block;">Removing you from the room...</span>');
 
-    // Remove temp class and add permanent blur
     document.body.classList.remove('privacy-screen');
     document.body.classList.add('privacy-blur');
 
     setTimeout(() => {
         socket.disconnect();
         localStorage.clear();
-        window.location.href = "login.html";
+        window.location.href = 'login.html';
     }, 1500);
 }
 
-window.addEventListener("keydown", (e) => {
-    if (e.key === "PrintScreen") {
+// ── Desktop: PrintScreen key ──────────────────────────────
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'PrintScreen') {
         e.preventDefault();
         e.stopPropagation();
-        // Blur immediately on keydown
         blurScreen('🛡️ Screenshots are blocked in this chat');
         for (let i = 0; i < 5; i++) {
-            navigator.clipboard.writeText("Screenshots are blocked.").catch(() => { });
+            navigator.clipboard.writeText('Screenshots are blocked.').catch(() => {});
         }
     }
 }, true);
 
-window.addEventListener("keyup", (e) => {
-    if (e.key === "PrintScreen") {
-        triggerPrivacyAlert("attempted a screenshot (PrintScreen key)!");
-        navigator.clipboard.writeText("Screenshots are disabled in this chat.").catch(() => { });
+window.addEventListener('keyup', (e) => {
+    if (e.key === 'PrintScreen') {
+        triggerPrivacyAlert('attempted a screenshot (PrintScreen key)!');
+        navigator.clipboard.writeText('Screenshots are disabled in this chat.').catch(() => {});
     }
 });
 
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") {
-        // Blur immediately so screen is hidden in the app switcher / screenshot
+// ── Mobile: Screen Capture API (Chrome Android 94+) ───────
+// This fires when the user starts a screen capture / screenshot on supported devices
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+        // Some Android devices briefly add a virtual screen capture device
+        triggerPrivacyAlert('a screen capture device was detected!');
+    });
+}
+
+// ── Mobile: window blur fires on iOS when screenshot button pressed ───
+// Also fires for Android volume+power combo on some browsers
+let lastBlurTime = 0;
+window.addEventListener('blur', () => {
+    if (privacyKickTriggered) return;
+    lastBlurTime = Date.now();
+
+    // Short blur = screenshot gesture (iOS ~100-300ms), long blur = real switch
+    // We blur the screen immediately, then decide after a short window
+    blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
+
+    screenshotBlurTimer = setTimeout(() => {
+        // Still blurred after 1s = real app switch, trigger kick via visibilitychange
+        // (visibilitychange will handle it). If came back already, unblur happened.
+    }, 1000);
+});
+
+window.addEventListener('focus', () => {
+    if (privacyKickTriggered) return;
+    clearTimeout(screenshotBlurTimer);
+    const blurDuration = Date.now() - lastBlurTime;
+
+    if (lastBlurTime > 0 && blurDuration < 600) {
+        // Very short blur = screenshot gesture on mobile → kick
+        triggerPrivacyAlert('attempted a screenshot (gesture detected)!');
+    } else {
+        // Longer = just came back from app switcher or file picker, unblur
+        unblurScreen();
+    }
+    lastBlurTime = 0;
+});
+
+// ── Tab switch / app minimize (all platforms) ─────────────
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        // Blur immediately so screen is hidden in the app switcher thumbnail
         blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
 
-        // Grace period: if page comes back quickly it was just file picker / system UI
+        // Grace period: file picker / system UI comes back quickly
         privacyHideTimer = setTimeout(() => {
-            if (document.visibilityState === "hidden") {
-                triggerPrivacyAlert("switched tabs or minimized the app!");
+            if (document.visibilityState === 'hidden') {
+                triggerPrivacyAlert('switched tabs or minimized the app!');
             }
         }, 800);
-    } else if (document.visibilityState === "visible") {
-        // Cancel pending kick and remove blur - was just file picker or brief system UI
+    } else if (document.visibilityState === 'visible') {
         clearTimeout(privacyHideTimer);
         if (!privacyKickTriggered) {
             unblurScreen();
