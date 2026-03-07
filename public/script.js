@@ -217,7 +217,7 @@ socket.on("joinRequest", ({ username, socketId }) => {
 socket.on("warningMsg", msg => {
     const div = document.createElement("div");
     div.className = "message warning";
-    div.innerHTML = msg;
+    div.innerHTML = `<strong style="color:#cc0000;">⚠️ ${msg}</strong>`;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
 
