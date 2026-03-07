@@ -234,6 +234,8 @@ function pressEnter(e) {
 
 // ================= LOGOUT =================
 function logout() {
+    // Tell server to cleanly remove us before disconnecting
+    socket.emit("logout", { username, room });
     localStorage.clear();
     socket.disconnect();
     window.location.href = "login.html";
