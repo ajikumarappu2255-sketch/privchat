@@ -454,43 +454,60 @@ function showFileWarning(msg) {
     const warn = document.createElement("div");
     warn.style.cssText = `
         position: fixed;
-        top: 14px;
+        top: env(safe-area-inset-top, 14px);
+        top: max(14px, env(safe-area-inset-top, 14px));
         left: 50%;
         transform: translateX(-50%);
         background: #ff4444;
         color: white;
-        padding: 10px 20px;
+        padding: 12px 24px;
         border-radius: 20px;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: bold;
-        z-index: 99999;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        z-index: 999999;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
         text-align: center;
         max-width: 90%;
+        width: max-content;
+        pointer-events: none;
+        white-space: normal;
+        word-break: break-word;
     `;
     warn.innerText = "⚠️ " + msg;
     document.body.appendChild(warn);
-    setTimeout(() => warn.remove(), 3500);
+    // Scroll to top so warning is visible on mobile
+    window.scrollTo(0, 0);
+    setTimeout(() => warn.remove(), 4000);
 }
 
 // Track file picker open/close
+// On mobile, visibilitychange:hidden fires AS SOON as the file picker opens
+// (before fileInput click). So we must set the flag on the attach BUTTON itself.
+const attachBtn = document.getElementById("attachBtn");
+if (attachBtn) {
+    attachBtn.addEventListener("click", () => {
+        filePickerOpen = true;
+        // Safety reset: if user cancels without picking (no change event)
+        setTimeout(() => { filePickerOpen = false; }, 60000);
+    });
+}
+
+// Also catch direct fileInput clicks just in case
 fileInput.addEventListener("click", () => {
     filePickerOpen = true;
-    // Safety: reset after 30s if user cancels without picking
-    setTimeout(() => { filePickerOpen = false; }, 30000);
 });
 
 window.addEventListener("focus", () => {
     // Page regained focus = file picker closed (picked or cancelled)
-    filePickerOpen = false;
+    // Small delay so any trailing visibilitychange:visible can fire first
+    setTimeout(() => { filePickerOpen = false; }, 500);
 });
 
 fileInput.addEventListener("change", (e) => {
-    // Keep filePickerOpen true for 1.5s after change fires.
-    // On mobile (iOS/Android), visibilitychange: hidden fires AFTER the
-    // file picker closes — even when we reject the file for size. Without
-    // this delay the privacy kick would trigger on large-file rejections.
-    setTimeout(() => { filePickerOpen = false; }, 1500);
+    // Keep filePickerOpen true for 3s after change fires.
+    // On mobile (iOS/Android), visibilitychange fires AFTER change —
+    // even when the file is rejected for size. 3s covers all devices.
+    setTimeout(() => { filePickerOpen = false; }, 3000);
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -929,20 +946,24 @@ window.addEventListener('keyup', (e) => {
 });
 
 // ── Tab switch / app minimize (all platforms) ─────────────
+// Mobile devices (iOS/Android) fire visibilitychange:hidden for file picker,
+// camera, keyboard, system dialogs — causing constant false kicks.
+// Privacy kick on tab/minimize is DESKTOP ONLY.
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
 document.addEventListener('visibilitychange', () => {
+    if (isMobile) return; // No kick on mobile — too many false positives
+
     if (document.visibilityState === 'hidden') {
-        // Never kick while file picker is open or file is uploading
         if (filePickerOpen || fileUploadInProgress) return;
 
-        // Blur immediately so screen is hidden in the app switcher thumbnail
         blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
 
-        // Grace period: system UI / brief interruptions come back quickly
         privacyHideTimer = setTimeout(() => {
             if (document.visibilityState === 'hidden' && !filePickerOpen && !fileUploadInProgress) {
                 triggerPrivacyAlert('switched tabs or minimized the app!');
             }
-        }, 1200);
+        }, 2000);
     } else if (document.visibilityState === 'visible') {
         clearTimeout(privacyHideTimer);
         if (!privacyKickTriggered) {
