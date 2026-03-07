@@ -247,7 +247,7 @@ socket.on("joinRequest", ({ username, socketId }) => {
 
 // ================= WARNING MESSAGE =================
 socket.on("warningMsg", msg => {
-    messages.innerHTML += `<div class="msg-bubble warning">${msg}</div>`;
+    messages.innerHTML += `<div class="message warning">${msg}</div>`;
     // Only log out on definitive rejection/closure messages
     const shouldLogout = msg.includes("rejected") || msg.includes("Room closed") || msg.includes("another device");
     if (shouldLogout) {
@@ -545,12 +545,20 @@ fileInput.addEventListener("change", (e) => {
 
 // 2. Render Previews
 function renderFilePreviews() {
-    filePreviewContainer.innerHTML = "";
+    // Remove only the thumbnail items, NOT the viewOnceContainer toggle
+    Array.from(filePreviewContainer.querySelectorAll('.file-preview-item')).forEach(el => el.remove());
 
+    const viewOnceContainer = document.getElementById('viewOnceContainer');
     if (selectedFiles.length > 0) {
         filePreviewContainer.style.display = "flex";
+        if (viewOnceContainer) viewOnceContainer.style.display = "inline-flex";
     } else {
         filePreviewContainer.style.display = "none";
+        if (viewOnceContainer) {
+            viewOnceContainer.style.display = "none";
+            const voChk = document.getElementById('viewOnceCheckbox');
+            if (voChk) voChk.checked = false;
+        }
         return;
     }
 
@@ -561,7 +569,7 @@ function renderFilePreviews() {
         // Remove Button
         const removeBtn = document.createElement("button");
         removeBtn.className = "preview-remove-btn";
-        removeBtn.innerHTML = "✖";
+        removeBtn.innerHTML = "\u2716";
         removeBtn.onclick = () => removeFile(index);
         item.appendChild(removeBtn);
 
@@ -587,7 +595,12 @@ function renderFilePreviews() {
             item.appendChild(name);
         }
 
-        filePreviewContainer.appendChild(item);
+        // Insert BEFORE the viewOnceContainer so thumbnails appear to the left of it
+        if (viewOnceContainer && viewOnceContainer.parentNode === filePreviewContainer) {
+            filePreviewContainer.insertBefore(item, viewOnceContainer);
+        } else {
+            filePreviewContainer.appendChild(item);
+        }
     });
 }
 
@@ -710,22 +723,44 @@ async function sendMessage() {
             else if (file.type.startsWith("video/")) fileTypeCategory = "video";
             else if (file.type.startsWith("audio/")) fileTypeCategory = "audio";
 
-            // Build file HTML using the public URL as a View Once Button
-            if (fileTypeCategory === "document" || fileTypeCategory === "audio") {
-                // Documents and Audio open in a new tab but via a controlled function so we can mark as viewed
-                fileHtmlContent += `
-                <button class="view-once-btn" data-url="${publicUrl}" onclick="viewDocument(this)">
-                    <span>${getFileIcon(file.type)}</span> 
-                    <span>View Once: ${safeName}</span>
-                </button><br>`;
+            const isViewOnce = document.getElementById('viewOnceCheckbox') && document.getElementById('viewOnceCheckbox').checked;
+
+            if (isViewOnce) {
+                // Build file HTML using the public URL as a View Once Button
+                const encodedUrl = encodeURIComponent(publicUrl);
+                
+                if (fileTypeCategory === "document" || fileTypeCategory === "audio") {
+                    fileHtmlContent += `
+                    <button class="view-once-btn" data-url="${encodedUrl}" onclick="viewDocument(this)" oncontextmenu="return false;">
+                        <span>${getFileIcon(file.type)}</span> 
+                        <span>View Once: ${safeName}</span>
+                    </button><br>`;
+                } else {
+                    const icon = fileTypeCategory === "image" ? "🖼️" : "🎬";
+                    fileHtmlContent += `
+                    <button class="view-once-btn" data-url="${encodedUrl}" onclick="viewMedia(&quot;${encodedUrl}&quot;, &quot;${fileTypeCategory}&quot;, this)" oncontextmenu="return false;">
+                        <span>${icon}</span> 
+                        <span>View Once: ${safeName}</span>
+                    </button><br>`;
+                }
             } else {
-                // Images and Videos open in the fullscreen modal
-                const icon = fileTypeCategory === "image" ? "🖼️" : "🎬";
-                fileHtmlContent += `
-                <button class="view-once-btn" data-url="${publicUrl}" onclick="viewMedia('${publicUrl}', '${fileTypeCategory}', this)">
-                    <span>${icon}</span> 
-                    <span>View Once: ${safeName}</span>
-                </button><br>`;
+                // Normal send — show file inline
+                if (fileTypeCategory === "image") {
+                    fileHtmlContent += `<img src="${publicUrl}" class="chat-media" draggable="false" oncontextmenu="return false;" onclick="viewMedia(this.src, 'image', null)"><br>`;
+                } else if (fileTypeCategory === "video") {
+                    fileHtmlContent += `<video src="${publicUrl}" controls controlsList="nodownload" oncontextmenu="return false;" class="chat-media"></video><br>`;
+                } else if (fileTypeCategory === "audio") {
+                    fileHtmlContent += `<audio src="${publicUrl}" controls controlsList="nodownload" oncontextmenu="return false;" class="chat-media"></audio><br>`;
+                } else {
+                    fileHtmlContent += `
+                    <a href="${publicUrl}" target="_blank" draggable="false" oncontextmenu="return false;" class="chat-file">
+                        <div class="chat-file-icon">${getFileIcon(file.type)}</div>
+                        <div class="chat-file-info">
+                            <span class="chat-file-name">${safeName}</span>
+                            <span class="chat-file-size">${(file.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                    </a><br>`;
+                }
             }
         }
         // ===== END SUPABASE UPLOAD =====
@@ -837,6 +872,10 @@ async function sendMessage() {
     msgInput.value = "";
     selectedFiles = [];
     renderFilePreviews();
+    const voChk = document.getElementById('viewOnceCheckbox');
+    if (voChk) voChk.checked = false;
+    const voContainer = document.getElementById('viewOnceContainer');
+    if (voContainer) voContainer.style.display = "none";
     sendBtn.disabled = false;
     sendBtn.innerText = "Send";
     stopTyping();
@@ -854,9 +893,9 @@ function viewMedia(src, type) {
     }
 }
 
-// ================= PRIVACY ALERT (server-side relay) =================
-socket.on("privacyAlert", ({ username: alertUser, reason }) => {
-    messages.innerHTML += `<div class="msg-bubble warning">⚠️ <strong>${alertUser}</strong> ${reason}</div>`;
+// ================= SYSTEM/PRIVACY ALERT (server-side relay) =================
+socket.on("warningMsg", (msg) => {
+    messages.innerHTML += `<div class="msg-bubble warning">${msg}</div>`;
     messages.scrollTop = messages.scrollHeight;
 });
 
@@ -882,9 +921,9 @@ function triggerPrivacyAlert(reason) {
     // Blur the chat
     document.body.classList.add('privacy-blur');
 
-    // Notify the room via server
-    socket.emit("privacyAlert", { room, username, reason });
-    socket.emit("privacyKick", { room, username, reason }); // Send kick warning to room
+    // Notify the room via server (restoring the auto-kick message)
+    // socket.emit("privacyAlert", { room, username, reason });
+    // socket.emit("privacyKick", { room, username, reason }); // Removed warning message broadcast as requested
 
     // Kick the user after 1 second (1000ms)
     setTimeout(() => {
@@ -899,10 +938,10 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "PrintScreen") {
         e.preventDefault();
         e.stopPropagation();
-        
+
         // Spam the clipboard with empty data to instantly corrupt the screenshot buffer
         for (let i = 0; i < 5; i++) {
-            navigator.clipboard.writeText("Screenshots are blocked.").catch(() => {});
+            navigator.clipboard.writeText("Screenshots are blocked.").catch(() => { });
         }
     }
 }, true);
@@ -911,7 +950,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => {
     if (e.key === "PrintScreen") {
         triggerPrivacyAlert("attempted a screenshot (PrintScreen key)!");
-        navigator.clipboard.writeText("Screenshots are disabled in this chat.").catch(() => {});
+        navigator.clipboard.writeText("Screenshots are disabled in this chat.").catch(() => { });
     }
 });
 
@@ -927,13 +966,16 @@ document.addEventListener("visibilitychange", () => {
 // ================= VIEW ONCE MEDIA logic =================
 let currentViewOnceButton = null;
 
-window.viewMedia = function(url, type, btnElement) {
-    if (btnElement.disabled) return;
-    currentViewOnceButton = btnElement;
+window.viewMedia = function (encodedUrl, type, btnElement) {
+    // btnElement is null for normal (non-view-once) inline images/videos
+    if (btnElement && btnElement.disabled) return;
+    currentViewOnceButton = btnElement || null;
+
+    const url = decodeURIComponent(encodedUrl);
 
     const modal = document.getElementById('mediaModal');
     const content = document.getElementById('mediaModalContent');
-    
+
     if (type === 'image') {
         content.innerHTML = '<img src="' + url + '" draggable="false" oncontextmenu="return false;">';
     } else if (type === 'video') {
@@ -943,34 +985,37 @@ window.viewMedia = function(url, type, btnElement) {
     modal.style.display = 'flex';
 };
 
-window.viewDocument = function(btnElement) {
+window.viewDocument = function (btnElement) {
     if (btnElement.disabled) return;
-    
-    const url = btnElement.getAttribute('data-url');
+
+    const encodedUrl = btnElement.getAttribute('data-url');
+    const url = decodeURIComponent(encodedUrl);
     // Open in new tab
     window.open(url, '_blank');
-    
-    // Instantly mark as destroyed locally
-    btnElement.innerHTML = '<span>🚫</span> <span>Viewed</span>';
-    btnElement.disabled = true;
-    btnElement.removeAttribute('data-url');
-    btnElement.removeAttribute('onclick');
+
+    // Instantly mark as destroyed locally, UNLESS it is the sender's own file
+    if (!btnElement.closest('.self')) {
+        btnElement.innerHTML = '<span>🚫</span> <span>Viewed</span>';
+        btnElement.disabled = true;
+        btnElement.removeAttribute('data-url');
+        btnElement.removeAttribute('onclick');
+    }
 };
 
-window.closeMediaModal = function() {
+window.closeMediaModal = function () {
     const modal = document.getElementById('mediaModal');
     const content = document.getElementById('mediaModalContent');
-    
+
     // Stop and clear video/image
     content.innerHTML = '';
     modal.style.display = 'none';
 
-    // Destroy the button so the file cannot be opened again
-    if (currentViewOnceButton) {
+    // Destroy the button so the file cannot be opened again, UNLESS it is the sender's own file
+    if (currentViewOnceButton && !currentViewOnceButton.closest('.self')) {
         currentViewOnceButton.innerHTML = '<span>🚫</span> <span>Viewed</span>';
         currentViewOnceButton.disabled = true;
         currentViewOnceButton.removeAttribute('data-url');
         currentViewOnceButton.removeAttribute('onclick');
-        currentViewOnceButton = null;
     }
+    currentViewOnceButton = null;
 };
