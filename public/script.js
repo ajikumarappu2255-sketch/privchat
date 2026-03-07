@@ -446,7 +446,6 @@ let selectedFiles = [];
 const fileInput = document.getElementById("fileInput");
 const filePreviewContainer = document.getElementById("filePreviewContainer");
 const MAX_FILE_SIZE_MB = 50;
-let isFilePickerOpen = false;
 
 function showFileWarning(msg) {
     const warn = document.createElement("div");
@@ -471,20 +470,7 @@ function showFileWarning(msg) {
     setTimeout(() => warn.remove(), 3500);
 }
 
-// Set flag BEFORE file picker opens to suppress visibility kick on mobile
-document.getElementById('attachBtn').addEventListener('click', () => {
-    isFilePickerOpen = true;
-    // Safety reset in case user cancels without choosing a file
-    setTimeout(() => { isFilePickerOpen = false; }, 10000);
-});
-
-// Also reset when window regains focus (user cancelled picker or returned)
-window.addEventListener('focus', () => {
-    isFilePickerOpen = false;
-});
-
 fileInput.addEventListener("change", (e) => {
-    isFilePickerOpen = false; // Reset flag when file selected
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -833,6 +819,7 @@ window.closeMediaModal = function () {
 // ================= PRIVACY PROTECTIONS =================
 // =======================================================
 let privacyKickTriggered = false;
+let privacyHideTimer = null;
 let currentViewOnceButton = null;
 
 function triggerPrivacyAlert(reason) {
@@ -875,8 +862,16 @@ window.addEventListener("keyup", (e) => {
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-        // Skip kick if user just opened the file picker on mobile
-        if (isFilePickerOpen) return;
-        triggerPrivacyAlert("switched tabs or minimized the app (possible screen capture)!");
+        // Use a grace period - if the page becomes visible again quickly
+        // it was just a file picker or system UI, not a real tab switch
+        privacyHideTimer = setTimeout(() => {
+            // Double-check we are still hidden before kicking
+            if (document.visibilityState === "hidden") {
+                triggerPrivacyAlert("switched tabs or minimized the app (possible screen capture)!");
+            }
+        }, 800);
+    } else if (document.visibilityState === "visible") {
+        // Page came back - cancel any pending kick (was just file picker / system UI)
+        clearTimeout(privacyHideTimer);
     }
 });
