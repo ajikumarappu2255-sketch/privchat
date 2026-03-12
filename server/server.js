@@ -120,39 +120,95 @@ io.on("connection", socket => {
             return;
         }
 
-        roomData.pending[socket.id] = username;
-        io.to(roomData.ownerSocket).emit("joinRequest", {
-            username,
-            socketId: socket.id
-        });
+        // Verify if username is already waiting for approval
+        let isAlreadyPending = false;
+        for (const pendingSocketId in roomData.pending) {
+            if (roomData.pending[pendingSocketId] === username) {
+                isAlreadyPending = true;
+                // Update their socket ID silently without sending another joinRequest popup to owner
+                delete roomData.pending[pendingSocketId];
+                roomData.pending[socket.id] = username;
+                break;
+            }
+        }
+
+        if (!isAlreadyPending) {
+            roomData.pending[socket.id] = username;
+            io.to(roomData.ownerSocket).emit("joinRequest", {
+                username,
+                socketId: socket.id
+            });
+        }
 
         socket.emit("waitingApproval", "Waiting for owner approval...");
     });
 
     // ================= APPROVE / REJECT USER =================
-    socket.on("approveUser", ({ room, socketId }) => {
+    socket.on("approveUser", ({ room, socketId, username }) => {
         const roomData = rooms[room];
         if (!roomData || socket.id !== roomData.ownerSocket) return;
 
-        const username = roomData.pending[socketId];
-        if (!username) return;
+        let targetUsername = username;
+        let targetSocketId = socketId;
+
+        if (!targetUsername) {
+            targetUsername = roomData.pending[socketId];
+        } else {
+            // Find the latest socketId for this username in pending
+            for (const key in roomData.pending) {
+                if (roomData.pending[key] === targetUsername) {
+                    targetSocketId = key;
+                    break;
+                }
+            }
+        }
+
+        if (!targetUsername || !targetSocketId) return;
 
         const newSessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-        roomData.users[username] = { socketId: socketId, sessionId: newSessionId };
-        delete roomData.pending[socketId];
+        roomData.users[targetUsername] = { socketId: targetSocketId, sessionId: newSessionId };
+        
+        // Remove all pending entries for this username just in case
+        for (const key in roomData.pending) {
+            if (roomData.pending[key] === targetUsername) {
+                delete roomData.pending[key];
+            }
+        }
 
-        io.sockets.sockets.get(socketId)?.join(room);
-        io.to(socketId).emit("privateMsg", { text: "Owner approved your entry.", sessionId: newSessionId });
+        io.sockets.sockets.get(targetSocketId)?.join(room);
+        io.to(targetSocketId).emit("privateMsg", { text: "Owner approved your entry.", sessionId: newSessionId });
         broadcastRoomUsers(room);
     });
 
-    socket.on("rejectUser", ({ room, socketId }) => {
+    socket.on("rejectUser", ({ room, socketId, username }) => {
         const roomData = rooms[room];
         if (!roomData || socket.id !== roomData.ownerSocket) return;
 
-        delete roomData.pending[socketId];
-        io.to(socketId).emit("warningMsg", "Owner rejected your request.");
-        io.sockets.sockets.get(socketId)?.disconnect();
+        let targetUsername = username;
+        let targetSocketId = socketId;
+
+        if (!targetUsername) {
+            targetUsername = roomData.pending[socketId];
+        } else {
+            // Find the latest socketId for this username in pending
+            for (const key in roomData.pending) {
+                if (roomData.pending[key] === targetUsername) {
+                    targetSocketId = key;
+                    break;
+                }
+            }
+        }
+        
+        if (!targetSocketId) return;
+
+        for (const key in roomData.pending) {
+            if (roomData.pending[key] === targetUsername) {
+                delete roomData.pending[key];
+            }
+        }
+
+        io.to(targetSocketId).emit("warningMsg", "Owner rejected your request.");
+        io.sockets.sockets.get(targetSocketId)?.disconnect();
     });
 
     // ================= SEND MESSAGE =================
