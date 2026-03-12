@@ -1,6 +1,6 @@
 // ================= SOCKET CONNECTION =================
 const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-    ? window.location.origin
+    ? "http://localhost:8080"
     : "https://privchat-server.onrender.com";
 const socket = io(SOCKET_URL, {
     transports: ["websocket", "polling"],
@@ -9,6 +9,7 @@ const socket = io(SOCKET_URL, {
 const username = localStorage.getItem("username");
 const room = localStorage.getItem("room");
 const token = localStorage.getItem("token");
+const sessionId = localStorage.getItem("sessionId");
 
 // ================= SUPABASE INIT =================
 const SUPABASE_URL = "https://zmntcnftwrfdxdrcizmp.supabase.co";
@@ -49,7 +50,7 @@ usernameDisplay.innerText = "User: " + username;
 roomName.innerText = "Room: " + room;
 
 // ================= JOIN ROOM =================
-socket.emit("joinRoom", { username, room, token });
+socket.emit("joinRoom", { username, room, token, sessionId });
 
 // ================= RECEIVE PRIVATE MESSAGE =================
 socket.on("privateMsg", data => {
@@ -57,6 +58,8 @@ socket.on("privateMsg", data => {
 
     if (typeof data === "string") {
         text = data;
+    } else if (data.text) {
+        text = data.text;
     } else {
         text = data.message;
         messageId = data.messageId;
