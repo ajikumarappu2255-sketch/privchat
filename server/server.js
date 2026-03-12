@@ -186,17 +186,21 @@ io.on("connection", socket => {
         if (!msg.seenBy.includes(username)) msg.seenBy.push(username);
 
         const totalReceivers = Object.keys(rooms[room].users).length - 1;
-        io.to(msg.senderSocket).emit("messageSeen", {
-            messageId,
-            seenBy: msg.seenBy,
-            allSeen: msg.seenBy.length === totalReceivers
-        });
+        const currentSenderSocket = rooms[room].users[msg.senderUsername];
+        if (currentSenderSocket) {
+            io.to(currentSenderSocket).emit("messageSeen", {
+                messageId,
+                seenBy: msg.seenBy,
+                allSeen: msg.seenBy.length === totalReceivers
+            });
+        }
     });
 
     socket.on("deleteMsg", ({ room, messageId }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
-        if (!msg || msg.senderSocket !== socket.id) return;
+        const senderUsername = getUsernameBySocket(room, socket.id);
+        if (!msg || msg.senderUsername !== senderUsername) return;
         delete messageStatus[messageId];
         io.to(room).emit("deleteMsg", { messageId });
     });
@@ -204,7 +208,8 @@ io.on("connection", socket => {
     socket.on("editMsg", ({ room, messageId, newText }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
-        if (!msg || msg.senderSocket !== socket.id) return;
+        const senderUsername = getUsernameBySocket(room, socket.id);
+        if (!msg || msg.senderUsername !== senderUsername) return;
         io.to(room).emit("editMsg", { messageId, newText });
     });
 
