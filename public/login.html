@@ -117,8 +117,11 @@
             socket.emit("joinRoom", { username: u, room: r, token: t });
 
             socket.once("waitingApproval", (msg) => {
-                error.style.color = "blue";
-                error.innerText = msg; // "Waiting for owner approval..."
+                // Instantly redirect to chat page to wait for approval inside the UI
+                localStorage.setItem("username", u);
+                localStorage.setItem("room", r);
+                localStorage.setItem("token", t);
+                window.location.href = "chat.html";
             });
 
             socket.on("privateMsg", (msg) => {
