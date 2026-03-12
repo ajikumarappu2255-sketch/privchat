@@ -77,6 +77,14 @@ io.on("connection", socket => {
             return;
         }
 
+        // Check if username is already in use in a DIFFERENT room
+        for (const existingRoom in rooms) {
+            if (existingRoom !== room && rooms[existingRoom].users[username]) {
+                socket.emit("warningMsg", "Username is already in use in another room!");
+                return;
+            }
+        }
+
         // Create room if it doesn't exist
         if (!rooms[room]) {
             rooms[room] = {
@@ -98,36 +106,16 @@ io.on("connection", socket => {
             return;
         }
 
-        // User already in room (session takeover / reconnect)
+        // Prevent duplicate username in the SAME room
         if (roomData.users[username]) {
-            const oldSocketId = roomData.users[username];
-
-            if (oldSocketId !== socket.id) {
-                // Silently kill old socket (same person, no warning needed)
-                const oldSock = io.sockets.sockets.get(oldSocketId);
-                if (oldSock) {
-                    loggedOutSockets.add(oldSocketId); // prevent disconnect handler from firing
-                    oldSock.disconnect(true);
-                }
-
-                // Transfer ownership if old socket was owner
-                if (roomData.ownerSocket === oldSocketId) {
-                    roomData.ownerSocket = socket.id;
-                }
-
-                roomData.users[username] = socket.id;
-            }
-
-            socket.join(room);
-            socket.emit("privateMsg", "Welcome back, " + username + "!");
-            broadcastRoomUsers(room);
+            socket.emit("warningMsg", "Username is already in use in this room!");
             return;
         }
 
         // New user — needs owner approval
         roomData.pending[socket.id] = username;
         io.to(roomData.ownerSocket).emit("joinRequest", { username, socketId: socket.id });
-        socket.emit("privateMsg", "Waiting for owner approval...");
+        socket.emit("waitingApproval", "Waiting for owner approval...");
     });
 
     // ===== APPROVE / REJECT =====
