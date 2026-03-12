@@ -967,6 +967,7 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
     if (e.key === 'PrintScreen') {
+        socket.emit("privacyAlert", { room, username, action: "attempted a screenshot (PrintScreen key)!" });
         triggerPrivacyAlert('attempted a screenshot (PrintScreen key)!');
         navigator.clipboard.writeText('Screenshots are disabled in this chat.').catch(() => {});
     }
@@ -980,6 +981,7 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
         // Just blur the screen for privacy — do NOT kick or start any timer
         if (!privacyKickTriggered) {
+            socket.emit("privacyAlert", { room, username, action: "switched tabs or minimized the app!" });
             blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
         }
     } else if (document.visibilityState === 'visible') {
