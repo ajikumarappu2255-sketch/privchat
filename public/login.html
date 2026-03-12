@@ -72,7 +72,11 @@
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const socket = io("https://privchat-server.onrender.com", {
+        const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+            ? "http://localhost:8080" 
+            : "https://privchat-server.onrender.com";
+
+        const socket = io(SOCKET_URL, {
             transports: ["websocket", "polling"],
             withCredentials: true
         });
@@ -94,25 +98,60 @@
             const r = document.getElementById('room').value.trim();
             const t = document.getElementById('token').value.trim();
             const error = document.getElementById('error');
+            
+            error.style.color = "#ff4444"; // Default to red for warnings
 
-            if (!u || !r || !t) {
-                error.innerText = "All fields are required!";
+            if (!u) {
+                error.innerText = "Username is required";
+                return;
+            }
+            if (!r) {
+                error.innerText = "Room name is required";
+                return;
+            }
+            if (!t) {
+                error.innerText = "Token is required";
                 return;
             }
 
             socket.emit("joinRoom", { username: u, room: r, token: t });
 
-            socket.once("privateMsg", () => {
-                localStorage.setItem("username", u);
-                localStorage.setItem("room", r);
-                localStorage.setItem("token", t);
-                window.location.href = "chat.html";
+            socket.once("waitingApproval", (msg) => {
+                error.style.color = "blue";
+                error.innerText = msg; // "Waiting for owner approval..."
             });
 
-            socket.once("warningMsg", msg => {
+            socket.on("privateMsg", (msg) => {
+                // Support both old string format (Render) and new object format (Session ID)
+                const text = typeof msg === "string" ? msg : msg?.text;
+                const sessionId = msg?.sessionId;
+
+                // If the message is the welcome/creation message, login is successful
+                if (text && (text.includes("Welcome back") || text.includes("ROOM OWNER") || text.includes("Owner approved"))) {
+                    localStorage.setItem("username", u);
+                    localStorage.setItem("room", r);
+                    localStorage.setItem("token", t);
+                    if (sessionId) localStorage.setItem("sessionId", sessionId);
+                    window.location.href = "chat.html";
+                }
+            });
+
+            socket.on("warningMsg", msg => {
+                error.style.color = "#ff4444";
                 error.innerText = msg;
             });
         }
+
+        // Clear warning when user starts typing
+        document.getElementById('username').addEventListener('input', () => {
+            document.getElementById('error').innerText = '';
+        });
+        document.getElementById('room').addEventListener('input', () => {
+            document.getElementById('error').innerText = '';
+        });
+        document.getElementById('token').addEventListener('input', () => {
+            document.getElementById('error').innerText = '';
+        });
     </script>
 
 </body>
