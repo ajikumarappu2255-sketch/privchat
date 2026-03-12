@@ -912,6 +912,16 @@ window.closeMediaModal = function () {
 let privacyKickTriggered = false;
 let privacyHideTimer = null;
 let currentViewOnceButton = null;
+let isPickingFile = false; // Prevents false privacy kicks/alerts when opening mobile file picker
+
+// Listen for attachment clicks to temporarily disable privacy screen
+document.addEventListener('click', (e) => {
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.getElementById('fileInput');
+    if (e.target === attachBtn || e.target === fileInput || attachBtn.contains(e.target)) {
+        isPickingFile = true;
+    }
+});
 
 // Create overlay element once and reuse
 function getOrCreateOverlay(message) {
@@ -979,12 +989,20 @@ window.addEventListener('keyup', (e) => {
 // (file picker, camera, keyboard, system dialogs all fire hidden on iOS/Android).
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+        if (isPickingFile) return; // Ignore if they are just opening the file gallery!
+
         // Just blur the screen for privacy — do NOT kick or start any timer
         if (!privacyKickTriggered) {
             socket.emit("privacyAlert", { room, username, action: "switched tabs or minimized the app!" });
             blurScreen('🛡️ Screen protected<br><span style="font-size:14px;font-weight:normal;margin-top:8px;display:block;">Return to the chat to continue</span>');
         }
     } else if (document.visibilityState === 'visible') {
+        if (isPickingFile) {
+            // Give it a tiny delay to reset so the file picker returning doesn't instantly trigger a blur
+            setTimeout(() => { isPickingFile = false; }, 500); 
+            return;
+        }
+
         if (!privacyKickTriggered) {
             unblurScreen();
         }
