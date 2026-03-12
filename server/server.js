@@ -5,7 +5,14 @@ const io = require("socket.io")(http, {
     maxHttpBufferSize: 5e7,
     pingTimeout: 60000,
     cors: {
-        origin: ["https://privchat-pi.vercel.app"],
+        origin: function (origin, callback) {
+            // Allow Vercel production and any localhost origin
+            if (!origin || origin === "https://privchat-pi.vercel.app" || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         methods: ["GET", "POST"]
     }
 });
@@ -22,7 +29,7 @@ function getUsernameBySocket(room, socketId) {
     const roomData = rooms[room];
     if (!roomData) return null;
     for (const user in roomData.users) {
-        if (roomData.users[user] === socketId) return user;
+        if (roomData.users[user].socketId === socketId) return user;
     }
     return null;
 }
@@ -45,7 +52,7 @@ function removeSocketFromRooms(socketId) {
 
         // Remove from users
         for (const user in r.users) {
-            if (r.users[user] === socketId) {
+            if (r.users[user].socketId === socketId) {
                 delete r.users[user];
                 broadcastRoomUsers(room);
                 break;
@@ -71,31 +78,10 @@ io.on("connection", socket => {
     });
 
     // ===== JOIN ROOM =====
-    socket.on("joinRoom", ({ username, room, token }) => {
+    socket.on("joinRoom", (data) => {
+        const { username, room, token } = data;
         if (!username || !room || !token) {
             socket.emit("warningMsg", "All fields are required!");
-            return;
-        }
-
-        // Check if username is already in use in a DIFFERENT room
-        for (const existingRoom in rooms) {
-            if (existingRoom !== room && rooms[existingRoom].users[username]) {
-                socket.emit("warningMsg", "Username is already in use in another room!");
-                return;
-            }
-        }
-
-        // Create room if it doesn't exist
-        if (!rooms[room]) {
-            rooms[room] = {
-                token,
-                ownerSocket: socket.id,
-                users: { [username]: socket.id },
-                pending: {}
-            };
-            socket.join(room);
-            socket.emit("privateMsg", "ROOM OWNER: You created the room.");
-            broadcastRoomUsers(room);
             return;
         }
 
@@ -106,9 +92,45 @@ io.on("connection", socket => {
             return;
         }
 
-        // Prevent duplicate username in the SAME room
-        if (roomData.users[username]) {
-            socket.emit("warningMsg", "Username is already in use in this room!");
+        // Case-insensitive check for duplicate username in the SAME room
+        let matchedExistingUsername = null;
+        for (const existingUser of Object.keys(roomData.users)) {
+            if (existingUser.toLowerCase() === username.toLowerCase()) {
+                matchedExistingUsername = existingUser;
+                break;
+            }
+        }
+
+        // User already exists in the room (either a duplicate or a reconnect)
+        if (matchedExistingUsername) {
+            const oldSocketId = roomData.users[matchedExistingUsername].socketId;
+            const expectedSessionId = roomData.users[matchedExistingUsername].sessionId;
+
+            // If the client didn't provide the correct sessionId, they are a clone/imposter
+            if (!data.sessionId || data.sessionId !== expectedSessionId) {
+                socket.emit("warningMsg", "This username is already in use in this room.");
+                return;
+            }
+
+            if (oldSocketId !== socket.id) {
+                // Silently kill old socket (same person, no warning needed)
+                const oldSock = io.sockets.sockets.get(oldSocketId);
+                if (oldSock) {
+                    loggedOutSockets.add(oldSocketId); // prevent disconnect handler from firing
+                    oldSock.disconnect(true);
+                }
+
+                // Transfer ownership if old socket was owner
+                if (roomData.ownerSocket === oldSocketId) {
+                    roomData.ownerSocket = socket.id;
+                }
+
+                roomData.users[matchedExistingUsername].socketId = socket.id;
+            }
+
+            socket.join(room);
+            socket.emit("privateMsg", { text: "Welcome back, " + matchedExistingUsername + "!", sessionId: expectedSessionId });
+            broadcastRoomUsers(room);
             return;
         }
 
@@ -126,11 +148,12 @@ io.on("connection", socket => {
         const username = roomData.pending[socketId];
         if (!username) return;
 
-        roomData.users[username] = socketId;
+        const newSessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+        roomData.users[username] = { socketId: socketId, sessionId: newSessionId };
         delete roomData.pending[socketId];
 
         io.sockets.sockets.get(socketId)?.join(room);
-        io.to(socketId).emit("privateMsg", "Owner approved your entry.");
+        io.to(socketId).emit("privateMsg", { text: "Owner approved your entry.", sessionId: newSessionId });
         broadcastRoomUsers(room);
     });
 
@@ -159,7 +182,7 @@ io.on("connection", socket => {
         socket.to(room).emit("privateMsg", { message, messageId, sender: socket.id });
 
         for (const user in rooms[room].users) {
-            if (rooms[room].users[user] !== socket.id) {
+            if (rooms[room].users[user].socketId !== socket.id) {
                 messageStatus[messageId].deliveredTo.push(user);
             }
         }
@@ -174,7 +197,7 @@ io.on("connection", socket => {
         if (!msg.seenBy.includes(username)) msg.seenBy.push(username);
 
         const totalReceivers = Object.keys(rooms[room].users).length - 1;
-        const currentSenderSocket = rooms[room].users[msg.senderUsername];
+        const currentSenderSocket = rooms[room].users[msg.senderUsername]?.socketId;
         if (currentSenderSocket) {
             io.to(currentSenderSocket).emit("messageSeen", {
                 messageId,
