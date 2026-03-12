@@ -20,11 +20,16 @@ const io = require("socket.io")(http, {
 app.use(express.static("public"));
 
 const rooms = {};
+// roomName => { token, ownerSocket, users: { username: {socketId, sessionId} }, pending: { socketId: username } }
+
+// 🔹 ADDED: Message status store
 const messageStatus = {};
+// messageId => { room, senderSocket, senderUsername, deliveredTo: [], seenBy: [] }
 
 // Track sockets that explicitly logged out — ignore their disconnect event
 const loggedOutSockets = new Set();
 
+// Helper: get username by socket id
 function getUsernameBySocket(room, socketId) {
     const roomData = rooms[room];
     if (!roomData) return null;
@@ -34,54 +39,35 @@ function getUsernameBySocket(room, socketId) {
     return null;
 }
 
+// 🔹 ADDED: Broadcast active users to room
 function broadcastRoomUsers(room) {
     if (!rooms[room]) return;
     const userList = Object.keys(rooms[room].users);
     io.to(room).emit("roomUsers", { users: userList });
 }
 
-// Central cleanup: remove socket from all rooms
-function removeSocketFromRooms(socketId) {
-    for (const room in rooms) {
-        const r = rooms[room];
-
-        // Remove from pending
-        for (const sid in r.pending) {
-            if (sid === socketId) delete r.pending[sid];
-        }
-
-        // Remove from users
-        for (const user in r.users) {
-            if (r.users[user].socketId === socketId) {
-                delete r.users[user];
-                broadcastRoomUsers(room);
-                break;
-            }
-        }
-
-        // If owner left, close the room
-        if (r.ownerSocket === socketId) {
-            io.to(room).emit("warningMsg", "Room owner left. Room closed.");
-            delete rooms[room];
-        }
-    }
-}
-
 io.on("connection", socket => {
 
-    // ===== EXPLICIT LOGOUT =====
-    // Client emits this before clearing localStorage and redirecting
-    socket.on("logout", () => {
-        loggedOutSockets.add(socket.id);
-        removeSocketFromRooms(socket.id);
-        socket.disconnect(true);
-    });
-
-    // ===== JOIN ROOM =====
+    // ================= JOIN ROOM =================
     socket.on("joinRoom", (data) => {
         const { username, room, token } = data;
+        
         if (!username || !room || !token) {
             socket.emit("warningMsg", "All fields are required!");
+            return;
+        }
+
+        if (!rooms[room]) {
+            const newSessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+            rooms[room] = {
+                token,
+                ownerSocket: socket.id,
+                users: { [username]: { socketId: socket.id, sessionId: newSessionId } },
+                pending: {}
+            };
+            socket.join(room);
+            socket.emit("privateMsg", { text: "ROOM OWNER: You created the room.", sessionId: newSessionId });
+            broadcastRoomUsers(room);
             return;
         }
 
@@ -101,7 +87,7 @@ io.on("connection", socket => {
             }
         }
 
-        // User already exists in the room (either a duplicate or a reconnect)
+        // User already in room (session takeover / reconnect)
         if (matchedExistingUsername) {
             const oldSocketId = roomData.users[matchedExistingUsername].socketId;
             const expectedSessionId = roomData.users[matchedExistingUsername].sessionId;
@@ -134,13 +120,16 @@ io.on("connection", socket => {
             return;
         }
 
-        // New user — needs owner approval
         roomData.pending[socket.id] = username;
-        io.to(roomData.ownerSocket).emit("joinRequest", { username, socketId: socket.id });
+        io.to(roomData.ownerSocket).emit("joinRequest", {
+            username,
+            socketId: socket.id
+        });
+
         socket.emit("waitingApproval", "Waiting for owner approval...");
     });
 
-    // ===== APPROVE / REJECT =====
+    // ================= APPROVE / REJECT USER =================
     socket.on("approveUser", ({ room, socketId }) => {
         const roomData = rooms[room];
         if (!roomData || socket.id !== roomData.ownerSocket) return;
@@ -163,14 +152,16 @@ io.on("connection", socket => {
 
         delete roomData.pending[socketId];
         io.to(socketId).emit("warningMsg", "Owner rejected your request.");
-        io.sockets.sockets.get(socketId)?.disconnect(true);
+        io.sockets.sockets.get(socketId)?.disconnect();
     });
 
-    // ===== MESSAGING =====
+    // ================= SEND MESSAGE =================
     socket.on("privateMsg", ({ room, message, messageId }) => {
         if (!rooms[room]) return;
 
         const senderUsername = getUsernameBySocket(room, socket.id);
+
+        // store message status
         messageStatus[messageId] = {
             room,
             senderSocket: socket.id,
@@ -179,25 +170,35 @@ io.on("connection", socket => {
             seenBy: []
         };
 
+        // send to other users only
         socket.to(room).emit("privateMsg", { message, messageId, sender: socket.id });
 
+        // mark delivered to others
         for (const user in rooms[room].users) {
             if (rooms[room].users[user].socketId !== socket.id) {
                 messageStatus[messageId].deliveredTo.push(user);
             }
         }
 
-        socket.emit("messageDelivered", { messageId, deliveredTo: messageStatus[messageId].deliveredTo });
+        // notify sender
+        socket.emit("messageDelivered", {
+            messageId,
+            deliveredTo: messageStatus[messageId].deliveredTo
+        });
     });
 
+    // ================= MESSAGE READ =================
     socket.on("messageRead", ({ room, messageId, username }) => {
         const msg = messageStatus[messageId];
         if (!msg || msg.room !== room) return;
 
-        if (!msg.seenBy.includes(username)) msg.seenBy.push(username);
+        if (!msg.seenBy.includes(username)) {
+            msg.seenBy.push(username);
+        }
 
         const totalReceivers = Object.keys(rooms[room].users).length - 1;
         const currentSenderSocket = rooms[room].users[msg.senderUsername]?.socketId;
+
         if (currentSenderSocket) {
             io.to(currentSenderSocket).emit("messageSeen", {
                 messageId,
@@ -207,24 +208,38 @@ io.on("connection", socket => {
         }
     });
 
+    // ================= DELETE MESSAGE =================
     socket.on("deleteMsg", ({ room, messageId }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
+        if (!msg) return;
+
+        // Use current sender username to authorize, enabling delete after reconnect
         const senderUsername = getUsernameBySocket(room, socket.id);
-        if (!msg || msg.senderUsername !== senderUsername) return;
+        if (msg.senderUsername !== senderUsername) return;
+
+        // remove from server store
         delete messageStatus[messageId];
+
+        // notify all users including sender
         io.to(room).emit("deleteMsg", { messageId });
     });
 
+    // ================= EDIT MESSAGE =================
     socket.on("editMsg", ({ room, messageId, newText }) => {
         if (!rooms[room]) return;
         const msg = messageStatus[messageId];
+        if (!msg) return;
+
+        // Use current sender username to authorize, enabling edit after reconnect
         const senderUsername = getUsernameBySocket(room, socket.id);
-        if (!msg || msg.senderUsername !== senderUsername) return;
+        if (msg.senderUsername !== senderUsername) return;
+
+        // Broadcast change
         io.to(room).emit("editMsg", { messageId, newText });
     });
 
-    // ===== TYPING =====
+    // ================= TYPING =================
     socket.on("typing", (data) => {
         if (!rooms[data.room]) return;
         socket.to(data.room).emit("typing", data);
@@ -235,29 +250,33 @@ io.on("connection", socket => {
         socket.to(data.room).emit("stopTyping");
     });
 
-    // ===== PRIVACY =====
-    socket.on("privacyAlert", ({ room, username, reason }) => {
-        if (!rooms[room]) return;
-        io.to(room).emit("warningMsg", `🚨 <b>PRIVACY ALERT:</b> ${username} ${reason}`);
-    });
-
-    socket.on("privacyKick", ({ room, username, reason }) => {
-        if (!rooms[room]) return;
-        io.to(room).emit("warningMsg", `🚫 <b>${username}</b> was automatically removed from the room due to a privacy violation: <em>${reason}</em>`);
-    });
-
-    // ===== DISCONNECT =====
+    // ================= DISCONNECT =================
     socket.on("disconnect", () => {
-        // Clean logout already handled above — skip
         if (loggedOutSockets.has(socket.id)) {
             loggedOutSockets.delete(socket.id);
             return;
         }
-        // Unclean disconnect (network drop, browser close, tab killed)
-        removeSocketFromRooms(socket.id);
+
+        for (const room in rooms) {
+            const r = rooms[room];
+
+            for (const user in r.users) {
+                if (r.users[user].socketId === socket.id) {
+                    delete r.users[user];
+                    broadcastRoomUsers(room);
+                }
+            }
+
+            if (r.ownerSocket === socket.id) {
+                io.to(room).emit("warningMsg", "Room owner left. Room closed.");
+                delete rooms[room];
+            }
+        }
     });
 
 });
 
 const PORT = process.env.PORT || 8080;
-http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+http.listen(PORT, () =>
+    console.log(`Server running on port ${PORT}`)
+);
