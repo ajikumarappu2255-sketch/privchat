@@ -306,6 +306,15 @@ io.on("connection", socket => {
         socket.to(data.room).emit("stopTyping");
     });
 
+    // ================= PRIVACY ALERT =================
+    socket.on("privacyAlert", ({ room, action, username }) => {
+        const roomData = rooms[room];
+        if (!roomData || !roomData.ownerSocket) return;
+
+        // Message strictly only the room owner
+        io.to(roomData.ownerSocket).emit("warningMsg", `${username} ${action}`);
+    });
+
     // ================= DISCONNECT =================
     socket.on("disconnect", () => {
         if (loggedOutSockets.has(socket.id)) {
