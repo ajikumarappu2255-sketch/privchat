@@ -66,6 +66,15 @@ socket.on("privateMsg", data => {
         sender = data.sender;
     }
 
+    if (text === "Owner approved your entry.") {
+        msgInput.disabled = false;
+        sendBtn.disabled = false;
+        msgInput.placeholder = "Type your message...";
+        const waitMsg = document.getElementById("waitingApprovalMsg");
+        if(waitMsg) waitMsg.remove();
+        if(data.sessionId) localStorage.setItem("sessionId", data.sessionId);
+    }
+
     const isMe = text.startsWith(username + ":");
     if (isMe && messageId && myMessages[messageId]) return;
 
@@ -209,10 +218,23 @@ socket.on("deleteMsg", ({ messageId }) => {
 // ================= JOIN REQUEST =================
 socket.on("joinRequest", ({ username, socketId }) => {
     if (confirm(`${username} wants to join. Approve?`)) {
-        socket.emit("approveUser", { room, socketId });
+        socket.emit("approveUser", { room, username, socketId });
     } else {
-        socket.emit("rejectUser", { room, socketId });
+        socket.emit("rejectUser", { room, username, socketId });
     }
+});
+
+// ================= WAITING APPROVAL =================
+socket.on("waitingApproval", (msg) => {
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+    msgInput.placeholder = "Waiting for Owner's Approval...";
+    
+    const div = document.createElement("div");
+    div.className = "message system";
+    div.innerHTML = `<strong style="color:blue;">System: Waiting for the Room Owner to approve you...</strong>`;
+    div.id = "waitingApprovalMsg";
+    messages.appendChild(div);
 });
 
 // ================= WARNING MESSAGE — SINGLE HANDLER =================
