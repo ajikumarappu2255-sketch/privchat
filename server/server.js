@@ -78,7 +78,7 @@ io.on("connection", socket => {
             return;
         }
 
-        // Case-insensitive check for duplicate username in the SAME room
+        // Case-insensitive check for duplicate username in the SAME room for SESSION TAKEOVER ONLY
         let matchedExistingUsername = null;
         for (const existingUser of Object.keys(roomData.users)) {
             if (existingUser.toLowerCase() === username.toLowerCase()) {
@@ -87,38 +87,32 @@ io.on("connection", socket => {
             }
         }
 
-        // User already in room (session takeover / reconnect)
-        if (matchedExistingUsername) {
+        // If user already in room AND provides correct sessionId, allow reconnect
+        if (matchedExistingUsername && data.sessionId) {
             const oldSocketId = roomData.users[matchedExistingUsername].socketId;
             const expectedSessionId = roomData.users[matchedExistingUsername].sessionId;
 
-            // If the client didn't provide the correct sessionId, they are a clone/imposter
-            if (!data.sessionId || data.sessionId !== expectedSessionId) {
-                socket.emit("warningMsg", "This username is already in use in this room.");
+            if (data.sessionId === expectedSessionId) {
+                if (oldSocketId !== socket.id) {
+                    const oldSock = io.sockets.sockets.get(oldSocketId);
+                    if (oldSock) {
+                        loggedOutSockets.add(oldSocketId);
+                        oldSock.disconnect(true);
+                    }
+                    if (roomData.ownerSocket === oldSocketId) {
+                        roomData.ownerSocket = socket.id;
+                    }
+                    roomData.users[matchedExistingUsername].socketId = socket.id;
+                }
+                socket.join(room);
+                socket.emit("privateMsg", { text: "Welcome back, " + matchedExistingUsername + "!", sessionId: expectedSessionId });
+                broadcastRoomUsers(room);
                 return;
             }
-
-            if (oldSocketId !== socket.id) {
-                // Silently kill old socket (same person, no warning needed)
-                const oldSock = io.sockets.sockets.get(oldSocketId);
-                if (oldSock) {
-                    loggedOutSockets.add(oldSocketId); // prevent disconnect handler from firing
-                    oldSock.disconnect(true);
-                }
-
-                // Transfer ownership if old socket was owner
-                if (roomData.ownerSocket === oldSocketId) {
-                    roomData.ownerSocket = socket.id;
-                }
-
-                roomData.users[matchedExistingUsername].socketId = socket.id;
-            }
-
-            socket.join(room);
-            socket.emit("privateMsg", { text: "Welcome back, " + matchedExistingUsername + "!", sessionId: expectedSessionId });
-            broadcastRoomUsers(room);
-            return;
         }
+        
+        // If it's a duplicate username but NOT a valid session takeover, 
+        // we still proceed to pending (per instructions) to avoid early error.
 
         // Verify if username is already waiting for approval
         let isAlreadyPending = false;
@@ -164,6 +158,23 @@ io.on("connection", socket => {
         }
 
         if (!targetUsername || !targetSocketId) return;
+
+        // 🔹 MOVED: Duplicate username check ONLY inside activeUsers at approval time
+        let isDuplicate = false;
+        for (const existingUser of Object.keys(roomData.users)) {
+            if (existingUser.toLowerCase() === targetUsername.toLowerCase()) {
+                isDuplicate = true;
+                break;
+            }
+        }
+
+        if (isDuplicate) {
+            socket.emit("warningMsg", `Approval failed: Username "${targetUsername}" is now taken.`);
+            io.to(targetSocketId).emit("warningMsg", "This username is already in use.");
+            // Remove from pending since it's an invalid request now
+            delete roomData.pending[targetSocketId];
+            return;
+        }
 
         const newSessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
         roomData.users[targetUsername] = { socketId: targetSocketId, sessionId: newSessionId };
