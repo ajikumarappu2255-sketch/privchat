@@ -78,7 +78,7 @@ io.on("connection", socket => {
             return;
         }
 
-        // Case-insensitive check for duplicate username in the SAME room for SESSION TAKEOVER ONLY
+        // Case-insensitive check for duplicate username in the SAME room
         let matchedExistingUsername = null;
         for (const existingUser of Object.keys(roomData.users)) {
             if (existingUser.toLowerCase() === username.toLowerCase()) {
@@ -87,32 +87,38 @@ io.on("connection", socket => {
             }
         }
 
-        // If user already in room AND provides correct sessionId, allow reconnect
-        if (matchedExistingUsername && data.sessionId) {
+        // User already in room (session takeover / reconnect)
+        if (matchedExistingUsername) {
             const oldSocketId = roomData.users[matchedExistingUsername].socketId;
             const expectedSessionId = roomData.users[matchedExistingUsername].sessionId;
 
-            if (data.sessionId === expectedSessionId) {
-                if (oldSocketId !== socket.id) {
-                    const oldSock = io.sockets.sockets.get(oldSocketId);
-                    if (oldSock) {
-                        loggedOutSockets.add(oldSocketId);
-                        oldSock.disconnect(true);
-                    }
-                    if (roomData.ownerSocket === oldSocketId) {
-                        roomData.ownerSocket = socket.id;
-                    }
-                    roomData.users[matchedExistingUsername].socketId = socket.id;
-                }
-                socket.join(room);
-                socket.emit("privateMsg", { text: "Welcome back, " + matchedExistingUsername + "!", sessionId: expectedSessionId });
-                broadcastRoomUsers(room);
+            // If the client didn't provide the correct sessionId, they are a clone/imposter
+            if (!data.sessionId || data.sessionId !== expectedSessionId) {
+                socket.emit("warningMsg", "This username is already in use in this room.");
                 return;
             }
+
+            if (oldSocketId !== socket.id) {
+                // Silently kill old socket (same person, no warning needed)
+                const oldSock = io.sockets.sockets.get(oldSocketId);
+                if (oldSock) {
+                    loggedOutSockets.add(oldSocketId); // prevent disconnect handler from firing
+                    oldSock.disconnect(true);
+                }
+
+                // Transfer ownership if old socket was owner
+                if (roomData.ownerSocket === oldSocketId) {
+                    roomData.ownerSocket = socket.id;
+                }
+
+                roomData.users[matchedExistingUsername].socketId = socket.id;
+            }
+
+            socket.join(room);
+            socket.emit("privateMsg", { text: "Welcome back, " + matchedExistingUsername + "!", sessionId: expectedSessionId });
+            broadcastRoomUsers(room);
+            return;
         }
-        
-        // If it's a duplicate username but NOT a valid session takeover, 
-        // we still proceed to pending (per instructions) to avoid early error.
 
         // Verify if username is already waiting for approval
         let isAlreadyPending = false;
