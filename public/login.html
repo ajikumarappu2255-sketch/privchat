@@ -149,6 +149,11 @@
             socket.on("warningMsg", msg => {
                 error.style.color = "#ff4444";
                 error.innerText = msg;
+                // Re-enable login button on error so user can fix and retry
+                const loginBtn = document.querySelector(".login-btn");
+                loginBtn.disabled = false;
+                loginBtn.style.opacity = "1";
+                loginBtn.style.cursor = "pointer";
             });
         }
 
