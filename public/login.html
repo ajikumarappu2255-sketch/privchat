@@ -114,6 +114,13 @@
                 return;
             }
 
+            error.style.color = "blue";
+            error.innerText = "Waiting for owner approval...";
+            const loginBtn = document.querySelector(".login-btn");
+            loginBtn.disabled = true;
+            loginBtn.style.opacity = "0.5";
+            loginBtn.style.cursor = "not-allowed";
+
             socket.emit("joinRoom", { username: u, room: r, token: t });
 
             socket.once("waitingApproval", (msg) => {
