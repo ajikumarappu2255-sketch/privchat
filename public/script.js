@@ -217,11 +217,13 @@ socket.on("deleteMsg", ({ messageId }) => {
 
 // ================= JOIN REQUEST =================
 socket.on("joinRequest", ({ username, socketId }) => {
-    if (confirm(`${username} wants to join. Approve?`)) {
-        socket.emit("approveUser", { room, username, socketId });
-    } else {
-        socket.emit("rejectUser", { room, username, socketId });
-    }
+    setTimeout(() => {
+        if (confirm(`${username} wants to join. Approve?`)) {
+            socket.emit("approveUser", { room, username, socketId });
+        } else {
+            socket.emit("rejectUser", { room, username, socketId });
+        }
+    }, 3000);
 });
 
 // ================= WAITING APPROVAL =================
