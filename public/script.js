@@ -965,9 +965,13 @@ function triggerPrivacyAlert(reason) {
     }, 1500);
 }
 
-// ── Desktop: PrintScreen key ──────────────────────────────
+// ── Desktop: PrintScreen key & Screenshot Shortcuts ──────────────────────────────
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'PrintScreen') {
+    const isWinShiftS = e.shiftKey && e.metaKey && e.key.toLowerCase() === 's';
+    const isWinShiftR = e.shiftKey && e.metaKey && e.key.toLowerCase() === 'r';
+    const isMacScreenshot = e.shiftKey && e.metaKey && (e.key === '3' || e.key === '4' || e.key === '5');
+
+    if (e.key === 'PrintScreen' || isWinShiftS || isWinShiftR || isMacScreenshot) {
         e.preventDefault();
         e.stopPropagation();
         blurScreen('🛡️ Screenshots are blocked in this chat');
@@ -978,9 +982,19 @@ window.addEventListener('keydown', (e) => {
 }, true);
 
 window.addEventListener('keyup', (e) => {
-    if (e.key === 'PrintScreen') {
-        socket.emit("privacyAlert", { room, username, action: "attempted a screenshot (PrintScreen key)!" });
-        triggerPrivacyAlert('attempted a screenshot (PrintScreen key)!');
+    const isWinShiftS = e.shiftKey && e.metaKey && e.key.toLowerCase() === 's';
+    const isWinShiftR = e.shiftKey && e.metaKey && e.key.toLowerCase() === 'r';
+    const isMacScreenshot = e.shiftKey && e.metaKey && (e.key === '3' || e.key === '4' || e.key === '5');
+
+    if (e.key === 'PrintScreen' || isWinShiftS || isWinShiftR || isMacScreenshot) {
+        let actionMsg = "attempted a screenshot!";
+        if (e.key === 'PrintScreen') actionMsg = "attempted a screenshot (PrintScreen key)!";
+        else if (isWinShiftS) actionMsg = "attempted a screenshot (Win/Cmd+Shift+S)!";
+        else if (isWinShiftR) actionMsg = "attempted a screen record (Win/Cmd+Shift+R)!";
+        else if (isMacScreenshot) actionMsg = "attempted a screenshot (Mac shortcut)!";
+
+        socket.emit("privacyAlert", { room, username, action: actionMsg });
+        triggerPrivacyAlert(actionMsg);
         navigator.clipboard.writeText('Screenshots are disabled in this chat.').catch(() => {});
     }
 });
