@@ -377,7 +377,7 @@ function updateDropdown(users, owner) {
         
         let removeHTML = "";
         if (isMeOwner && u !== username) {
-            removeHTML = `<span onclick="removeUser('${u}', event)" style="color: red; cursor: pointer; margin-right: 10px; font-size: 14px; flex-shrink: 0;" title="Remove User">✖</span>`;
+            removeHTML = `<span onclick="removeUser('${u}', event)" style="color: red; cursor: pointer; margin-left: auto; padding-left: 10px; font-size: 14px; flex-shrink: 0;" title="Remove User">✖</span>`;
         }
         
         let ownerLabel = "";
@@ -385,7 +385,7 @@ function updateDropdown(users, owner) {
             ownerLabel = `<br><span style="color:#94a3b8; font-size:11px;">(Owner)</span>`;
         }
         
-        userP.innerHTML = `${removeHTML}<span style="flex-grow: 1; word-break: break-all; line-height: 1.2;">${u}${ownerLabel}</span>`;
+        userP.innerHTML = `<span style="flex-grow: 1; word-break: break-all; line-height: 1.2;">${u}${ownerLabel}</span>${removeHTML}`;
         
         // Prevent default hover actions if we are not clicking the remove button
         if(u !== username && !isMeOwner) {
