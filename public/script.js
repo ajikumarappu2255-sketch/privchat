@@ -248,7 +248,7 @@ socket.on("warningMsg", msg => {
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
 
-    const shouldLogout = msg.includes("Owner rejected") || msg.includes("Room closed");
+    const shouldLogout = msg.includes("Owner rejected") || msg.includes("Room closed") || msg.includes("removed from the room");
     if (shouldLogout) {
         setTimeout(logout, 1500);
     }
@@ -380,7 +380,12 @@ function updateDropdown(users, owner) {
             removeHTML = `<span onclick="removeUser('${u}', event)" style="color: red; cursor: pointer; margin-right: 10px; font-size: 14px; flex-shrink: 0;" title="Remove User">✖</span>`;
         }
         
-        userP.innerHTML = `${removeHTML}<span style="flex-grow: 1; word-break: break-all;">${u} ${u === owner ? '<span style="color:#94a3b8;font-size:11px;margin-left:4px;">(Owner)</span>' : ''}</span>`;
+        let ownerLabel = "";
+        if (u === owner) {
+            ownerLabel = `<br><span style="color:#94a3b8; font-size:11px;">(Owner)</span>`;
+        }
+        
+        userP.innerHTML = `${removeHTML}<span style="flex-grow: 1; word-break: break-all; line-height: 1.2;">${u}${ownerLabel}</span>`;
         
         // Prevent default hover actions if we are not clicking the remove button
         if(u !== username && !isMeOwner) {
