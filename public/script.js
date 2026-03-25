@@ -356,12 +356,53 @@ document.addEventListener("click", () => {
 });
 
 // ================= ONLINE USERS =================
-socket.on("roomUsers", ({ users }) => {
+socket.on("roomUsers", ({ users, owner }) => {
     currentRoomUsers = users;
     if (onlineUsersDiv) {
         onlineUsersDiv.innerText = "Online: " + users.join(", ");
     }
+    updateDropdown(users, owner);
 });
+
+function updateDropdown(users, owner) {
+    const isMeOwner = (username === owner);
+    if (!dropdown) return;
+    
+    dropdown.innerHTML = '';
+    
+    users.forEach(u => {
+        const userP = document.createElement("p");
+        userP.style.display = "flex";
+        userP.style.alignItems = "center";
+        
+        let removeHTML = "";
+        if (isMeOwner && u !== username) {
+            removeHTML = `<span onclick="removeUser('${u}', event)" style="color: red; cursor: pointer; margin-right: 10px; font-size: 14px; flex-shrink: 0;" title="Remove User">✖</span>`;
+        }
+        
+        userP.innerHTML = `${removeHTML}<span style="flex-grow: 1; word-break: break-all;">${u} ${u === owner ? '<span style="color:#94a3b8;font-size:11px;margin-left:4px;">(Owner)</span>' : ''}</span>`;
+        
+        // Prevent default hover actions if we are not clicking the remove button
+        if(u !== username && !isMeOwner) {
+            userP.style.cursor = "default";
+        }
+        
+        dropdown.appendChild(userP);
+    });
+    
+    const logoutBtn = document.createElement("p");
+    logoutBtn.innerText = "Logout";
+    logoutBtn.onclick = logout;
+    logoutBtn.style.borderTop = "1px solid #e2e8f0";
+    dropdown.appendChild(logoutBtn);
+}
+
+function removeUser(targetUser, event) {
+    if (event) event.stopPropagation();
+    if (confirm(`Remove ${targetUser} from the room?`)) {
+        socket.emit("removeUser", { room, username: targetUser });
+    }
+}
 
 // ================= MENTION DROPDOWN LOGIC =================
 msgInput.addEventListener("input", (e) => {
