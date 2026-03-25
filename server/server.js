@@ -43,7 +43,16 @@ function getUsernameBySocket(room, socketId) {
 function broadcastRoomUsers(room) {
     if (!rooms[room]) return;
     const userList = Object.keys(rooms[room].users);
-    io.to(room).emit("roomUsers", { users: userList });
+    const roomData = rooms[room];
+    const ownerSocket = roomData.ownerSocket;
+    let ownerUsername = null;
+    for (const [uname, udata] of Object.entries(roomData.users)) {
+        if (udata.socketId === ownerSocket) {
+            ownerUsername = uname;
+            break;
+        }
+    }
+    io.to(room).emit("roomUsers", { users: userList, owner: ownerUsername });
 }
 
 io.on("connection", socket => {
@@ -330,6 +339,18 @@ io.on("connection", socket => {
 
         // Message strictly only the room owner
         io.to(roomData.ownerSocket).emit("warningMsg", `${username} ${action}`);
+    });
+
+    // ================= REMOVE USER =================
+    socket.on("removeUser", ({ room, username: targetUsername }) => {
+        const roomData = rooms[room];
+        if (!roomData || roomData.ownerSocket !== socket.id) return; // Only owner can remove
+
+        const targetData = roomData.users[targetUsername];
+        if (targetData) {
+            io.to(targetData.socketId).emit("warningMsg", "You have been removed from the room by the owner.");
+            io.sockets.sockets.get(targetData.socketId)?.disconnect();
+        }
     });
 
     // ================= DISCONNECT =================
